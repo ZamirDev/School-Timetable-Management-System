@@ -1,0 +1,169 @@
+:root {
+  --bg-page: #f0f9ff;
+  --bg-card: #ffffff;
+  --bg-input: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-tab-inactive: #f1f5f9;
+  --bg-table-even: #f8fafc;
+  --bg-table-hover: #eff6ff;
+  --bg-success: #f0fdf4;
+  --bg-error: #fef2f2;
+  --bg-warning: #fef3c7;
+  --bg-swap-selected: #dbeafe;
+  --bg-overlay: rgba(0, 0, 0, 0.7);
+  --bg-modal: #ffffff;
+  --bg-config-panel: #f8fafc;
+
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-tertiary: #475569;
+  --text-muted: #cbd5e1;
+  --text-error: #dc2626;
+  --text-success: #0f766e;
+  --text-table-header: #0c4a6e;
+  --text-break: #92400e;
+
+  --border: #cbd5e1;
+  --border-light: #e2e8f0;
+  --border-error: #fecaca;
+  --border-success: #bbf7d0;
+}
+
+[data-theme="dark"] {
+  --bg-page: #0f172a;
+  --bg-card: #1e293b;
+  --bg-input: #334155;
+  --bg-sidebar: #1e293b;
+  --bg-tab-inactive: #334155;
+  --bg-table-even: #1e293b;
+  --bg-table-hover: #334155;
+  --bg-success: #064e3b;
+  --bg-error: #450a0a;
+  --bg-warning: #451a03;
+  --bg-swap-selected: #1e3a5f;
+  --bg-overlay: rgba(0, 0, 0, 0.85);
+  --bg-modal: #1e293b;
+  --bg-config-panel: #1e293b;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #94a3b8;
+  --text-muted: #475569;
+  --text-error: #fca5a5;
+  --text-success: #6ee7b7;
+  --text-table-header: #7dd3fc;
+  --text-break: #fbbf24;
+
+  --border: #334155;
+  --border-light: #334155;
+  --border-error: #dc2626;
+  --border-success: #166534;
+}
+
+body {
+  font-size: 16px;
+}
+
+[data-theme="dark"] body {
+  background: var(--bg-page);
+}
+
+[data-theme="dark"] table tr[style*="background: #f8fafc"],
+[data-theme="dark"] table tr[style*="background: \"#f8fafc\""] {
+  background: var(--bg-table-even) !important;
+}
+[data-theme="dark"] table tr[style*="background: white"] {
+  background: var(--bg-card) !important;
+}
+
+[data-theme="dark"] div[style*="background: white"] {
+  background: var(--bg-card) !important;
+}
+[data-theme="dark"] div[style*="background: #f8fafc"] {
+  background: var(--bg-config-panel) !important;
+}
+
+[data-theme="dark"] td[style*="background: #f0f9ff"] {
+  background: #1e293b !important;
+}
+[data-theme="dark"] td[style*="background: #fef3c7"] {
+  background: #451a03 !important;
+}
+
+[data-theme="dark"] th[style*="background"] {
+  background: #1e293b !important;
+}
+
+[data-theme="dark"] button[style*="background: #fef2f2"] {
+  background: var(--bg-error) !important;
+  border-color: var(--border-error) !important;
+  color: var(--text-error) !important;
+}
+[data-theme="dark"] button[style*="background: #f0fdf4"] {
+  background: var(--bg-success) !important;
+  border-color: var(--border-success) !important;
+  color: var(--text-success) !important;
+}
+[data-theme="dark"] button[style*="background: #ffecec"] {
+  background: var(--bg-error) !important;
+  color: var(--text-error) !important;
+}
+
+[data-theme="dark"] span[style*="background: linear-gradient(135deg, #e0e7ff"] {
+  background: #334155 !important;
+  color: #93c5fd !important;
+}
+[data-theme="dark"] span[style*="background: linear-gradient(135deg, #fef2f2"] {
+  background: #450a0a !important;
+  color: #fca5a5 !important;
+}
+[data-theme="dark"] span[style*="background: #fff7ed"] {
+  background: #451a03 !important;
+  color: #fdba74 !important;
+}
+[data-theme="dark"] span[style*="color: #10b981"][style*="background: #ecfdf5"] {
+  color: #6ee7b7 !important;
+  background: #064e3b !important;
+}
+
+[data-theme="dark"] div[style*="background: linear-gradient(135deg, #f0fdf4"] {
+  background: #064e3b !important;
+  border-color: #166534 !important;
+}
+[data-theme="dark"] div[style*="background: linear-gradient(135deg, #fef2f2"] {
+  background: #450a0a !important;
+  border-color: #dc2626 !important;
+}
+
+[data-theme="dark"] ul li[style*="background: #f8fafc"] {
+  background: #1e293b !important;
+}
+
+[data-theme="dark"] table tr[style*="background: linear-gradient"] {
+  background: #1e293b !important;
+}
+
+[data-theme="dark"] label {
+  color: var(--text-tertiary) !important;
+}
+
+[data-theme="dark"] h2, [data-theme="dark"] h3 {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] p {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] tr[style*="transition"] {
+  background: var(--bg-table-even) !important;
+}
+[data-theme="dark"] tr[style*="transition"]:hover {
+  background: var(--bg-table-hover) !important;
+}
+
+[data-theme="dark"] select, [data-theme="dark"] input, [data-theme="dark"] textarea {
+  background: var(--bg-input) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
