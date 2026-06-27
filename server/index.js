@@ -10,6 +10,9 @@ const Class = require("./models/Class");
 const Absence = require("./models/Absence");
 const GroupSync = require("./models/GroupSync");
 const User = require("./models/User");
+
+// In-memory progress store for timetable generation
+const generationProgress = {};
 const { auth, adminOnly } = require("./middleware/auth");
 const authRoutes = require("./routes/auth");
 const leaveRequestRoutes = require("./routes/leaveRequests");
@@ -158,6 +161,16 @@ function generateTimeSlots(schoolTiming, periodsPerDay) {
 
 
 // ─────────────────────────────────────────────
+//  GENERATION PROGRESS (polled by frontend)
+// ─────────────────────────────────────────────
+
+app.get("/generate-progress", auth, (req, res) => {
+  const prog = generationProgress[req.effectiveCreatedBy];
+  if (!prog) return res.json({ current: 0, total: 6, stage: "", active: false });
+  res.json({ ...prog, active: true });
+});
+
+// ─────────────────────────────────────────────
 //  TIMETABLE GENERATOR
 // ─────────────────────────────────────────────
 
@@ -271,8 +284,13 @@ app.post("/generate-timetable", auth, adminOnly, async (req, res) => {
 
     const maxPeriods = Math.max(...classes.map(c => c.periodsPerDay || 6));
 
+    const userId = req.effectiveCreatedBy;
+    generationProgress[userId] = { current: 0, total: DAYS.length, stage: "Starting generation..." };
+
     // ── MAIN LOOP: day → period → ALL classes simultaneously ──
-    for (const day of DAYS) {
+    for (let di = 0; di < DAYS.length; di++) {
+      const day = DAYS[di];
+      generationProgress[userId] = { current: di, total: DAYS.length, stage: `Processing ${day}...` };
       // Shuffle class order each day so no class always gets last pick
       const shuffledClasses = [...classes];
       for (let i = shuffledClasses.length - 1; i > 0; i--) {
@@ -536,7 +554,7 @@ app.post("/generate-timetable", auth, adminOnly, async (req, res) => {
               });
           }
 
-          timetableMap[cid][day].push({
+            timetableMap[cid][day].push({
             period:  p,
             startTime: timeSlotsByClass[cid][p - 1].startTime,
             endTime: timeSlotsByClass[cid][p - 1].endTime,
@@ -546,7 +564,9 @@ app.post("/generate-timetable", auth, adminOnly, async (req, res) => {
           });
         }
       }
+      generationProgress[userId] = { current: di + 1, total: DAYS.length, stage: `Finished ${day}` };
     }
+    generationProgress[userId] = { current: DAYS.length, total: DAYS.length, stage: "Saving to database..." };
 
     // ── Build quota summary ──
     const quotaSummary = {};
@@ -592,9 +612,12 @@ app.post("/generate-timetable", auth, adminOnly, async (req, res) => {
       await Class.findByIdAndUpdate(cls._id, { $set: { timetable: newTimetable } });
     }
 
+    delete generationProgress[userId];
     res.json({ message: "Timetable Generated Successfully", quotaSummary });
 
   } catch (err) {
+    const userId = req.effectiveCreatedBy;
+    delete generationProgress[userId];
     console.log("GEN ERROR:", err);
     res.status(500).json({ error: "Generation failed" });
   }

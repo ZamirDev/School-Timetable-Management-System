@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cardStyle, buttonPrimary, buttonSecondary } from "../utils/styles";
 import { apiFetch } from "../utils/api";
 import * as XLSX from "xlsx";
@@ -19,11 +19,19 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
   const [importing, setImporting] = useState(false);
   const [importFile, setImportFile] = useState(null);
 
+  // Progress bar
+  const [genProgress, setGenProgress] = useState(null);
+  const pollRef = useRef(null);
+
   const isAdmin = role === "admin";
   const isStudent = role === "student";
 
   const [studentClass, setStudentClass] = useState(null);
   const [loadingStudent, setLoadingStudent] = useState(false);
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
 
   useEffect(() => {
     if (isStudent && studentClassRef) {
@@ -310,15 +318,35 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
     reader.readAsArrayBuffer(file);
   };
 
+  const pollProgress = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await apiFetch("/generate-progress");
+        const data = await res.json();
+        if (data.active) {
+          setGenProgress(data);
+        } else {
+          setGenProgress(null);
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch { /* ignore */ }
+    }, 300);
+  };
+
   const generateTimetable = async () => {
     setGenerating(true);
+    setGenProgress({ current: 0, total: 6, stage: "Preparing..." });
     setQuotaSummary(null);
     setConflictsChecked(false);
+    pollProgress();
     await apiFetch("/reset-timetable", { method: "POST" });
     const res = await apiFetch("/generate-timetable", { method: "POST" });
     const data = await res.json();
     if (data.quotaSummary) setQuotaSummary(data.quotaSummary);
     setGenerating(false);
+    setGenProgress(null);
+    if (pollRef.current) clearInterval(pollRef.current);
     fetchClasses();
   };
 
@@ -414,6 +442,28 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                 📥 {showImport ? "Close Import" : "Import Data"}
               </button>
             )}
+          </div>
+        )}
+
+        {/* PROGRESS BAR */}
+        {genProgress && (
+          <div style={{ marginTop: "16px", padding: "16px", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", fontWeight: 600, color: "var(--text-secondary)" }}>
+              <span>{genProgress.stage}</span>
+              <span>{Math.round((genProgress.current / genProgress.total) * 100)}%</span>
+            </div>
+            <div style={{ width: "100%", height: "10px", background: "#e2e8f0", borderRadius: "5px", overflow: "hidden" }}>
+              <div style={{
+                width: `${(genProgress.current / genProgress.total) * 100}%`,
+                height: "100%",
+                background: "linear-gradient(90deg, #3b82f6, #2563eb)",
+                borderRadius: "5px",
+                transition: "width 0.3s ease",
+              }} />
+            </div>
+            <p style={{ margin: "8px 0 0 0", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center" }}>
+              {genProgress.current} of {genProgress.total} days completed
+            </p>
           </div>
         )}
 
