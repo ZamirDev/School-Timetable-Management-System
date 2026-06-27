@@ -170,7 +170,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
         Name: usr.teacherRef?.name || usr.schoolName || "—",
         Subject: usr.teacherRef?.subject || "—",
         Class: usr.classRef?.name || "—",
-        Password: usr.plainPassword || "",
+        Password: btoa(usr.plainPassword || ""),
       }));
       const ws4 = XLSX.utils.json_to_sheet(usersSheet);
       XLSX.utils.book_append_sheet(wb, ws4, "Accounts");
@@ -260,14 +260,19 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
             trackTeacher: r["Track Teacher"] || r.trackTeacher,
             trackSubject: r["Track Subject"] || r.trackSubject,
           })),
-          accounts: rawAccounts.map(r => ({
-            email: r.Email || r.email,
-            role: r.Role || r.role,
-            name: r.Name || r.name,
-            subject: r.Subject || r.subject,
-            className: r.Class || r.className,
-            password: r.Password || r.password,
-          })),
+          accounts: rawAccounts.map(r => {
+            const rawPw = r.Password || r.password || "";
+            let password = rawPw;
+            try { password = atob(rawPw); } catch {}
+            return {
+              email: r.Email || r.email,
+              role: r.Role || r.role,
+              name: r.Name || r.name,
+              subject: r.Subject || r.subject,
+              className: r.Class || r.className,
+              password,
+            };
+          }),
           absences: rawAbsences.map(r => ({
             teacherName: r.Teacher || r.teacher,
             day: r.Day || r.day,
