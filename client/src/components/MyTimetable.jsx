@@ -2,10 +2,10 @@ const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 const cardStyle = {
   background: "var(--bg-card)",
-  borderRadius: "12px",
-  padding: "24px",
+  borderRadius: "clamp(8px, 2vw, 12px)",
+  padding: "clamp(16px, 4vw, 24px)",
   boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-  marginBottom: "24px",
+  marginBottom: "clamp(12px, 3vw, 24px)",
   border: "1px solid var(--border-color)"
 };
 
@@ -69,9 +69,13 @@ export default function MyTimetable({ user, classes, teachers }) {
     for (const dayData of cls.timetable) {
       if (!grid[dayData.day]) continue;
       for (const period of dayData.periods) {
-        if (!period.teacher || period.subject === "Free Period") continue;
-        const tid = period.teacher._id || period.teacher;
-        if (String(tid) === String(teacherRef)) {
+        if (!period.teacher && (!period.tracks || period.tracks.length === 0)) continue;
+        if (period.subject === "Free Period" && (!period.tracks || period.tracks.length === 0)) continue;
+
+        const tid = period.teacher?._id || period.teacher;
+
+        // Check if teacher is the primary teacher
+        if (tid && String(tid) === String(teacherRef)) {
           grid[dayData.day][period.period - 1].push({
             class: cls.name,
             subject: period.subject,
@@ -79,6 +83,23 @@ export default function MyTimetable({ user, classes, teachers }) {
             startTime: period.startTime,
             endTime: period.endTime
           });
+        }
+
+        // Check if teacher is in a track (group)
+        if (period.tracks && Array.isArray(period.tracks)) {
+          for (const track of period.tracks) {
+            const trackTid = track.teacher?._id || track.teacher;
+            if (trackTid && String(trackTid) === String(teacherRef)) {
+              grid[dayData.day][period.period - 1].push({
+                class: cls.name,
+                subject: track.subject,
+                groupName: track.groupName,
+                periodNum: period.period,
+                startTime: period.startTime,
+                endTime: period.endTime
+              });
+            }
+          }
         }
       }
     }
@@ -100,8 +121,8 @@ export default function MyTimetable({ user, classes, teachers }) {
             No timetables generated yet. Contact an admin to generate them.
           </p>
         ) : (
-          <div style={{ overflowX: "auto", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-            <table style={{ borderCollapse: "collapse", fontSize: "14px", width: "100%" }}>
+          <div className="table-wrap" style={{ overflowX: "auto", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+            <table className="responsive-table" style={{ borderCollapse: "collapse", fontSize: "14px", width: "100%" }}>
               <thead>
                 <tr style={{ background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)" }}>
                   <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #cbd5e1", fontWeight: "700", color: "var(--text-table-header)", fontSize: "15px" }}>📅 Day</th>
@@ -130,7 +151,9 @@ export default function MyTimetable({ user, classes, teachers }) {
                               assignments.map((a, i) => (
                                 <div key={i} style={{ marginBottom: i < assignments.length - 1 ? "8px" : 0 }}>
                                   <div style={{ fontWeight: "700", color: "var(--text-primary)", fontSize: "14px" }}>{a.class}</div>
-                                  <div style={{ color: "#0369a1", fontSize: "12px", fontWeight: "600" }}>{a.subject}</div>
+                                  <div style={{ color: "#0369a1", fontSize: "12px", fontWeight: "600" }}>
+                                    {a.groupName ? `${a.groupName} — ${a.subject}` : a.subject}
+                                  </div>
                                 </div>
                               ))
                             )}

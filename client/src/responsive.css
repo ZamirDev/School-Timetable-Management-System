@@ -1,0 +1,149 @@
+/* ───── Responsive Layout ───── */
+
+/* Mobile: sidebar collapses to horizontal tab strip */
+@media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  .app-layout .sidebar-wrapper {
+    width: 100% !important;
+    position: static !important;
+    padding: 8px 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: hidden;
+  }
+
+  .app-layout .sidebar-tabs {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    gap: 6px !important;
+    padding: 8px 4px !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .app-layout .sidebar-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-layout .tab-btn {
+    flex-shrink: 0 !important;
+    width: auto !important;
+    padding: 8px 14px !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+    margin: 0 !important;
+    border-radius: 20px !important;
+  }
+
+  /* Main content takes full width */
+  .app-layout .main-content {
+    width: 100% !important;
+  }
+}
+
+/* ───── Header Mobile ───── */
+@media (max-width: 768px) {
+  .header-inner {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .header-title-area {
+    text-align: center;
+  }
+
+  .header-title-area h1 {
+    font-size: 24px !important;
+  }
+
+  .header-controls {
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+  }
+}
+
+/* ───── Cards mobile ───── */
+@media (max-width: 480px) {
+  .card {
+    padding: 12px !important;
+  }
+
+  .card-md {
+    padding: 16px !important;
+  }
+}
+
+/* ───── Tables mobile ───── */
+@media (max-width: 768px) {
+  .table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap::after {
+    content: "← Swipe →";
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: #94a3b8;
+    padding: 4px 0;
+    font-weight: 500;
+  }
+
+  .responsive-table th,
+  .responsive-table td {
+    padding: 8px 6px !important;
+    font-size: 12px !important;
+    min-width: 80px !important;
+  }
+}
+
+/* ───── Config panel mobile ───── */
+@media (max-width: 768px) {
+  .config-panel-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ───── Forms mobile ───── */
+@media (max-width: 768px) {
+  .form-grid-3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .form-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .flex-row {
+    flex-direction: column !important;
+  }
+
+  .flex-row > div {
+    width: 100% !important;
+  }
+
+  .flex-row button {
+    width: 100% !important;
+  }
+}
+
+/* ───── Buttons mobile ───── */
+@media (max-width: 480px) {
+  .btn-group {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .btn-group button,
+  .btn-group a {
+    width: 100% !important;
+  }
+}

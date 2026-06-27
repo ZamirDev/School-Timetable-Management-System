@@ -12,9 +12,7 @@ code {
     monospace;
 }
 
-/* Mobile layout fixes */
+/* Mobile input sizing */
 @media (max-width: 768px) {
-  table { display: block; overflow-x: auto; white-space: nowrap; }
   input, select, textarea { box-sizing: border-box; }
-  div[style*="display: flex"] { flex-wrap: wrap !important; }
 }

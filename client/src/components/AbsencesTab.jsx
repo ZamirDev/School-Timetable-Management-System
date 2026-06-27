@@ -33,6 +33,7 @@ export default function AbsencesTab({
         </h2>
         <form
           onSubmit={saveAbsence}
+          className="form-grid-3"
           style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "12px", alignItems: "flex-end" }}
         >
           <div>

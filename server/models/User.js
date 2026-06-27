@@ -29,6 +29,23 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Teacher",
     default: null
+  },
+  classRef: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Class",
+    default: null
+  },
+  resetToken: {
+    type: String,
+    default: null
+  },
+  resetTokenExpiry: {
+    type: Date,
+    default: null
+  },
+  plainPassword: {
+    type: String,
+    default: ""
   }
 }, { timestamps: true });
 

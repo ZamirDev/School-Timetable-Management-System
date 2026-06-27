@@ -12,8 +12,8 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
         marginBottom: "32px",
         boxShadow: "0 4px 20px rgba(15, 23, 42, 0.15)"
       }}>
-        <div style={{ maxWidth: "1400px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
+        <div className="header-inner" style={{ maxWidth: "1400px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div className="header-title-area">
             <h1 style={{
               margin: 0,
               fontSize: "32px",
@@ -21,7 +21,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
               color: "#f0f9ff",
               letterSpacing: "-0.5px"
             }}>
-              🏫 {user?.role === "teacher" ? "Teacher Panel" : "Admin Panel"}
+              🏫 {user?.role === "teacher" ? "Teacher Panel" : user?.role === "student" ? "Student Panel" : "Admin Panel"}
             </h1>
             <p style={{
               margin: "8px 0 0 0",
@@ -31,10 +31,12 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
             }}>
               {user?.role === "teacher"
                 ? "View timetable · Submit leave requests · Download PDFs"
+                : user?.role === "student"
+                ? "View your class timetable · Download PDFs"
                 : "Configure classes and teachers · Generate timetables · Export PDFs"}
             </p>
           </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div className="header-controls" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             {user && (
               <div style={{
                 display: "flex",
@@ -196,6 +198,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
                   <li><strong>School Timing:</strong> Set start time, period duration, and break (applies to all classes)</li>
                   <li><strong>Configure (⚙️):</strong> Assign teachers to a class and set periods per day</li>
                   <li><strong>Teacher Quota:</strong> Control how many periods each teacher teaches (optional — skip for auto-distribution)</li>
+                  <li><strong>Teacher Groups:</strong> Group teachers who share the same slot (e.g., elective subjects like Math/Bio). All group members are automatically placed together when you generate.</li>
                 </ul>
               </section>
 
@@ -209,8 +212,9 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
                 <ul style={{ margin: "8px 0 0 20px", paddingLeft: 0 }}>
                   <li><strong>Generate All Timetables (🔴):</strong> Auto-creates schedules for all classes at once</li>
                   <li><strong>Check Conflicts (🔵):</strong> Detects teachers assigned to multiple classes at the same time</li>
-                  <li><strong>Swap Periods:</strong> Click a cell, then click another to swap (same class, same day)</li>
+                  <li><strong>Edit Cells (✏️):</strong> Toggle edit mode and click any cell to change teacher/subject or add elective groups</li>
                   <li><strong>Download PDF:</strong> Export any class timetable as a printable PDF</li>
+                  <li><strong>Export All Data (📥):</strong> Download an Excel file with all teachers, classes, timetables, and accounts</li>
                 </ul>
               </section>
 
@@ -300,6 +304,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
                   <li>🔄 Teachers won't teach the same class back-to-back</li>
                   <li>⏰ Each teacher teaches max 4 periods per day</li>
                   <li>❌ Skip quota to auto-distribute teachers evenly</li>
+                  <li>👥 Use <strong>Teacher Groups</strong> for elective subjects — grouped teachers always share the same period slot</li>
                   <li>🌙 Toggle dark mode with the ☀️/🌙 button in the header</li>
                 </ul>
               </section>

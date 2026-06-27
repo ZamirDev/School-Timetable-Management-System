@@ -27,7 +27,15 @@ const classSchema = new mongoose.Schema({
             type: mongoose.Schema.Types.ObjectId,
             ref: "Teacher"
           },
-          subject: String
+          subject: String,
+          tracks: [{
+            groupName: String,
+            teacher: {
+              type: mongoose.Schema.Types.ObjectId,
+              ref: "Teacher"
+            },
+            subject: String
+          }]
         }
       ]
     }
@@ -38,6 +46,13 @@ const classSchema = new mongoose.Schema({
     breakAfter: { type: Number, default: 3 },
     breakDuration: { type: Number, default: 20 }
   },
+  teacherGroups: [{
+    groupName: String,
+    teachers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Teacher"
+    }]
+  }],
   teacherQuota: {
     type: Map,
     of: Number,

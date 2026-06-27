@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
-export default function Login() {
+export default function Login({ onForgot }) {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -120,6 +120,25 @@ export default function Login() {
               color: "var(--text-primary, #0f172a)",
             }}
           />
+        </div>
+
+        <div style={{ textAlign: "right", marginBottom: "16px" }}>
+          <button
+            type="button"
+            onClick={onForgot}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#3b82f6",
+              fontSize: "14px",
+              fontWeight: 500,
+              cursor: "pointer",
+              padding: 0,
+              textDecoration: "underline",
+            }}
+          >
+            Forgot Password?
+          </button>
         </div>
 
         <button

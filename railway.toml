@@ -1,2 +1,9 @@
 [build]
 rootDir = "server"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+
+[deploy.multiRegionConfig."us-west2"]
+numReplicas = 1

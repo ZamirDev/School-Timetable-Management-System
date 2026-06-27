@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import FieldError from "./ui/FieldError";
 import { buttonPrimary, buttonSecondary, inputStyle, withValidation } from "../utils/styles";
 
@@ -14,6 +15,7 @@ export default function ClassConfigPanel({
   handleQuotaChange,
   assignTeacher,
   removeTeacher,
+  saveTeacherGroups,
   saveQuota,
   clearTeacherQuota,
   savePpd,
@@ -26,6 +28,49 @@ export default function ClassConfigPanel({
   validateAssignmentField
 }) {
   const quotaErrors = errors.quota || {};
+
+  const [localGroups, setLocalGroups] = useState([]);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupTids, setNewGroupTids] = useState([]);
+  const [savingGroups, setSavingGroups] = useState(false);
+
+  useEffect(() => {
+    const raw = classItem.teacherGroups;
+    if (raw && Array.isArray(raw) && raw.length > 0) {
+      setLocalGroups(raw.map(g => ({
+        groupName: g.groupName || "",
+        teacherIds: (g.teachers || []).map(t => String(t._id ?? t)),
+      })));
+    } else {
+      setLocalGroups([]);
+    }
+  }, [classItem._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAddGroup = () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    if (newGroupTids.length < 2) return;
+    if (localGroups.some(g => g.groupName === name)) return;
+    setLocalGroups([...localGroups, { groupName: name, teacherIds: newGroupTids }]);
+    setNewGroupName("");
+    setNewGroupTids([]);
+  };
+
+  const handleRemoveGroup = (idx) => {
+    setLocalGroups(localGroups.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveGroups = async () => {
+    setSavingGroups(true);
+    await saveTeacherGroups(classItem._id, localGroups);
+    setSavingGroups(false);
+  };
+
+  const toggleGroupTeacher = (tid) => {
+    setNewGroupTids(prev =>
+      prev.includes(tid) ? prev.filter(id => id !== tid) : [...prev, tid]
+    );
+  };
 
   return (
     <div style={{ background: "linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)", border: "1px solid #cbd5e1", borderRadius: "10px", padding: "16px", marginTop: "16px" }}>
@@ -122,6 +167,130 @@ export default function ClassConfigPanel({
             ))}
           </ul>
         )}
+      </div>
+
+      {/* C. TEACHER GROUPS */}
+      <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+        <label style={{ display: "block", marginBottom: "8px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
+          🎯 Teacher Groups
+        </label>
+        <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "var(--text-secondary)" }}>
+          Group teachers who share the same period slot (e.g. elective subjects). Grouped teachers will always appear together in the timetable.
+        </p>
+
+        {/* Existing groups */}
+        {localGroups.length > 0 && (
+          <div style={{ marginBottom: "12px" }}>
+            {localGroups.map((g, idx) => (
+              <div key={idx} style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "8px 10px",
+                borderRadius: "6px",
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                marginBottom: "6px",
+                fontSize: "14px",
+              }}>
+                <div>
+                  <strong style={{ color: "var(--text-primary)" }}>{g.groupName}</strong>
+                  <span style={{ color: "var(--text-secondary)", fontSize: "13px", marginLeft: "8px" }}>
+                    — {g.teacherIds.map(tid => {
+                      const t = classItem.teachers.find(ct => String(ct._id) === tid);
+                      return t ? t.name : "?";
+                    }).join(", ")}
+                  </span>
+                </div>
+                <button
+                  onClick={() => handleRemoveGroup(idx)}
+                  style={{
+                    background: "#ffecec",
+                    color: "#dc2626",
+                    border: "none",
+                    padding: "4px 10px",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add new group form */}
+        <div style={{ background: "white", borderRadius: "8px", border: "1px solid #cbd5e1", padding: "12px" }}>
+          <div style={{ marginBottom: "10px" }}>
+            <input
+              type="text"
+              value={newGroupName}
+              onChange={e => setNewGroupName(e.target.value)}
+              placeholder="Group name (e.g. Elective, Split)"
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box", fontSize: "14px", padding: "8px" }}
+            />
+          </div>
+          <div style={{ marginBottom: "10px" }}>
+            <label style={{ fontSize: "13px", color: "#475569", display: "block", marginBottom: "6px", fontWeight: "600" }}>
+              Select teachers (min 2):
+            </label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {classItem.teachers.map(t => {
+                const tid = String(t._id);
+                const isSelected = newGroupTids.includes(tid);
+                const isAlreadyGrouped = localGroups.some(g => g.teacherIds.includes(tid));
+                return (
+                  <label
+                    key={tid}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      border: `1px solid ${isSelected ? "#3b82f6" : "#e2e8f0"}`,
+                      background: isSelected ? "#eff6ff" : "#f8fafc",
+                      cursor: isAlreadyGrouped ? "not-allowed" : "pointer",
+                      fontSize: "13px",
+                      opacity: isAlreadyGrouped ? 0.5 : 1,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={isAlreadyGrouped}
+                      onChange={() => toggleGroupTeacher(tid)}
+                      style={{ accentColor: "#3b82f6" }}
+                    />
+                    {t.name} ({t.subject})
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <button
+            onClick={handleAddGroup}
+            disabled={!newGroupName.trim() || newGroupTids.length < 2}
+            style={{
+              ...buttonSecondary,
+              padding: "6px 14px",
+              fontSize: "13px",
+              opacity: (!newGroupName.trim() || newGroupTids.length < 2) ? 0.5 : 1,
+            }}
+          >
+            + Add Group
+          </button>
+        </div>
+
+        <button
+          onClick={handleSaveGroups}
+          disabled={savingGroups}
+          style={{ ...buttonPrimary, marginTop: "12px", padding: "8px 16px", fontSize: "14px" }}
+        >
+          {savingGroups ? "Saving..." : "💾 Save Groups"}
+        </button>
       </div>
 
       {/* D. TEACHER QUOTA */}

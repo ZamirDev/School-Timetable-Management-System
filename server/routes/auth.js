@@ -13,7 +13,7 @@ const router = express.Router();
 // POST /auth/register — admin only, creates new accounts
 router.post("/register", auth, adminOnly, async (req, res) => {
   try {
-    const { email, password, role, schoolName, name, subject } = req.body;
+    const { email, password, role, schoolName, name, subject, classRef } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password required" });
     }
@@ -35,6 +35,14 @@ router.post("/register", auth, adminOnly, async (req, res) => {
       teacherRef = teacher._id;
     }
 
+    let studentClassRef = null;
+    if (role === "student") {
+      if (!classRef) {
+        return res.status(400).json({ error: "Class selection is required for students" });
+      }
+      studentClassRef = classRef;
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({
       email: email.toLowerCase(),
@@ -42,14 +50,17 @@ router.post("/register", auth, adminOnly, async (req, res) => {
       role: role || "admin",
       schoolName: schoolName || "",
       createdBy: req.effectiveCreatedBy,
-      teacherRef
+      teacherRef,
+      classRef: studentClassRef,
+      plainPassword: password
     });
     res.status(201).json({
       _id: user._id,
       email: user.email,
       role: user.role,
       schoolName: user.schoolName,
-      teacherRef
+      teacherRef,
+      classRef: studentClassRef
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -79,7 +90,8 @@ router.post("/login", async (req, res) => {
         email: user.email,
         role: user.role,
         schoolName: user.schoolName,
-        teacherRef: user.teacherRef
+        teacherRef: user.teacherRef,
+        classRef: user.classRef
       }
     });
   } catch (err) {
@@ -94,7 +106,8 @@ router.get("/me", auth, (req, res) => {
     email: req.user.email,
     role: req.user.role,
     schoolName: req.user.schoolName,
-    teacherRef: req.user.teacherRef
+    teacherRef: req.user.teacherRef,
+    classRef: req.user.classRef
   });
 });
 
@@ -122,8 +135,144 @@ router.get("/users", auth, adminOnly, async (req, res) => {
     const users = await User.find({ createdBy: req.effectiveCreatedBy })
       .select("-password")
       .populate("teacherRef")
+      .populate("classRef", "name")
       .sort({ createdAt: -1 });
     res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /auth/bulk-import — admin-only, bulk import teachers and students from spreadsheet
+router.post("/bulk-import", auth, adminOnly, async (req, res) => {
+  try {
+    const { rows } = req.body;
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: "No rows provided" });
+    }
+
+    const result = { imported: 0, skipped: 0, errors: [] };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 1;
+
+      try {
+        if (!row.email || !row.password) {
+          result.errors.push({ row: rowNum, reason: "Email and password are required" });
+          continue;
+        }
+
+        const email = row.email.toLowerCase().trim();
+        const existing = await User.findOne({ email });
+        if (existing) {
+          result.skipped++;
+          continue;
+        }
+
+        const type = (row.type || "").toLowerCase().trim();
+
+        if (type === "teacher") {
+          if (!row.name || !row.subject) {
+            result.errors.push({ row: rowNum, reason: "Teacher name and subject are required" });
+            continue;
+          }
+          const teacher = await Teacher.create({
+            name: row.name.trim(),
+            subject: row.subject.trim(),
+            createdBy: req.effectiveCreatedBy
+          });
+          const hashed = await bcrypt.hash(row.password, 10);
+          await User.create({
+            email,
+            password: hashed,
+            role: "teacher",
+            schoolName: "",
+            createdBy: req.effectiveCreatedBy,
+            teacherRef: teacher._id,
+            plainPassword: row.password
+          });
+          result.imported++;
+        } else if (type === "student") {
+          if (!row.className) {
+            result.errors.push({ row: rowNum, reason: "Class name is required for students" });
+            continue;
+          }
+          const cls = await Class.findOne({ name: row.className.trim(), createdBy: req.effectiveCreatedBy });
+          if (!cls) {
+            result.errors.push({ row: rowNum, reason: `Class "${row.className}" not found` });
+            continue;
+          }
+          const hashed = await bcrypt.hash(row.password, 10);
+          await User.create({
+            email,
+            password: hashed,
+            role: "student",
+            schoolName: "",
+            createdBy: req.effectiveCreatedBy,
+            classRef: cls._id,
+            plainPassword: row.password
+          });
+          result.imported++;
+        } else {
+          result.errors.push({ row: rowNum, reason: `Unknown type "${row.type}". Use "teacher" or "student"` });
+        }
+      } catch (err) {
+        result.errors.push({ row: rowNum, reason: err.message });
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /auth/forgot-password — generates a reset token
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return res.status(404).json({ error: "No account with that email" });
+
+    const crypto = require("crypto");
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    user.resetToken = resetToken;
+    user.resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
+    await user.save();
+
+    console.log(`\n🔐 Password reset token for ${email}: ${resetToken}\n`);
+
+    res.json({
+      message: "Reset token generated. Check server console or copy the token below.",
+      token: resetToken
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /auth/reset-password — uses token to set new password
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: "Token and new password are required" });
+    if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+
+    const user = await User.findOne({
+      resetToken: token,
+      resetTokenExpiry: { $gt: new Date() }
+    });
+    if (!user) return res.status(400).json({ error: "Invalid or expired token" });
+
+    user.password = await bcrypt.hash(password, 10);
+    user.resetToken = null;
+    user.resetTokenExpiry = null;
+    await user.save();
+
+    res.json({ message: "Password reset successful. You can now login with your new password." });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

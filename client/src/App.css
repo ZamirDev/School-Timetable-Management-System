@@ -37,10 +37,5 @@
   }
 }
 
-/* Sidebar Layout */
-@media (max-width: 768px) {
-  div[style*="display: flex"] {
-    flex-direction: column !important;
-  }
-}
+
 

@@ -1,11 +1,15 @@
+// build-v2
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const PDFDocument = require("pdfkit");
+const bcrypt = require("bcryptjs");
 const Teacher = require("./models/Teacher");
 const Class = require("./models/Class");
 const Absence = require("./models/Absence");
+const GroupSync = require("./models/GroupSync");
+const User = require("./models/User");
 const { auth, adminOnly } = require("./middleware/auth");
 const authRoutes = require("./routes/auth");
 const leaveRequestRoutes = require("./routes/leaveRequests");
@@ -226,6 +230,41 @@ app.post("/generate-timetable", auth, adminOnly, async (req, res) => {
       explicitQuotaByClass[cid] = new Set(quotaEntries.map(([tid]) => tid));
     }
 
+    // ── Build teacher group lookups per class ──
+    const teacherToGroup = {};  // [cid][tid] = { groupName, teacherIds }
+    const groupedTeacherIds = {}; // [cid] = Set<tid>
+    for (const cls of classes) {
+      const cid = String(cls._id);
+      teacherToGroup[cid] = {};
+      groupedTeacherIds[cid] = new Set();
+      if (cls.teacherGroups && Array.isArray(cls.teacherGroups)) {
+        for (const g of cls.teacherGroups) {
+          const ids = g.teachers.map(t => String(t._id ?? t));
+          for (const tid of ids) {
+            teacherToGroup[cid][tid] = { groupName: g.groupName, teacherIds: ids };
+            groupedTeacherIds[cid].add(tid);
+          }
+        }
+      }
+    }
+
+    // ── Build group sync lookups ──
+    const groupSyncs = await GroupSync.find({ createdBy: req.effectiveCreatedBy });
+    const syncByClass = {}; // [cid] = Array<{ syncId, teacherKey, teacherIds, groupName }>
+    const slotClaims = {}; // [syncId] = Set<"day_period">
+    const syncsList = []; // { syncId, classIds, teacherIds, teacherKey, groupName }
+    for (const sync of groupSyncs) {
+      const tids = (sync.teacherIds || []).map(t => String(t._id ?? t));
+      const cids = (sync.classIds || []).map(c => String(c._id ?? c));
+      const teacherKey = [...tids].sort().join(',');
+      slotClaims[sync.syncId] = new Set();
+      syncsList.push({ syncId: sync.syncId, classIds: cids, teacherIds: tids, teacherKey, groupName: sync.groupName });
+      for (const cid of cids) {
+        if (!syncByClass[cid]) syncByClass[cid] = [];
+        syncByClass[cid].push({ syncId: sync.syncId, teacherKey, teacherIds: tids, groupName: sync.groupName });
+      }
+    }
+
     // assignedCount[cid][tid] = periods assigned so far in this class this week
     const assignedCount = {};
     for (const cls of classes) assignedCount[String(cls._id)] = {};
@@ -243,106 +282,258 @@ app.post("/generate-timetable", auth, adminOnly, async (req, res) => {
 
       for (let p = 1; p <= maxPeriods; p++) {
         const timeKey = `${day}_${p}`;
+        const handledCids = new Set(); // classes already assigned via leader pass
 
+        // ── SYNC LEADER PASS: try to claim unclaimed sync slots ──
+        for (const syncData of syncsList) {
+          if (slotClaims[syncData.syncId].has(timeKey)) continue;
+
+          // Shuffle sync classes so the "leader" varies
+          const syncCids = [...syncData.classIds];
+          for (let i = syncCids.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [syncCids[i], syncCids[j]] = [syncCids[j], syncCids[i]];
+          }
+
+          for (const cid of syncCids) {
+            const cls = classes.find(c => String(c._id) === cid);
+            if (!cls || p > (cls.periodsPerDay || 6)) continue;
+            if (handledCids.has(cid)) continue;
+
+            // Verify this class actually has this group
+            const firstTid = syncData.teacherIds[0];
+            const classGroupInfo = teacherToGroup[cid]?.[firstTid];
+            if (!classGroupInfo) continue;
+            const classGroupKey = [...classGroupInfo.teacherIds].sort().join(',');
+            if (classGroupKey !== syncData.teacherKey) continue;
+
+            const lastKey  = `${cid}_${day}_${p - 1}`;
+            const target   = targetMapByClass[cid];
+            const assigned = assignedCount[cid];
+
+            let allAvailable = true;
+            for (const gid of syncData.teacherIds) {
+              if (absentTeacherDays.has(`${gid}_${day}`)) { allAvailable = false; break; }
+              if ((assigned[gid] || 0) >= (target[gid] || 0)) { allAvailable = false; break; }
+              if ((teacherDayLoad[`${gid}_${day}`] || 0) >= 4) { allAvailable = false; break; }
+              if ((teacherClassDayCount[`${gid}_${cid}_${day}`] || 0) >= 2) { allAvailable = false; break; }
+              if (teacherTimeTable[gid] && teacherTimeTable[gid][timeKey]) { allAvailable = false; break; }
+              if (lastPeriodTeacher[lastKey] && lastPeriodTeacher[lastKey] === gid) { allAvailable = false; break; }
+            }
+            if (!allAvailable) continue;
+
+            const ft = cls.teachers.find(t => String(t._id) === syncData.teacherIds[0]);
+            if (!ft) continue;
+
+            // Assign ALL group members (full tracking — this is the leader)
+            for (const gid of syncData.teacherIds) {
+              assigned[gid] = (assigned[gid] || 0) + 1;
+              teacherDayLoad[`${gid}_${day}`] = (teacherDayLoad[`${gid}_${day}`] || 0) + 1;
+              if (!teacherTimeTable[gid]) teacherTimeTable[gid] = {};
+              teacherTimeTable[gid][timeKey] = true;
+              teacherClassDayCount[`${gid}_${cid}_${day}`] = (teacherClassDayCount[`${gid}_${cid}_${day}`] || 0) + 1;
+            }
+            lastPeriodTeacher[`${cid}_${day}_${p}`] = syncData.teacherIds[0];
+
+            const leaderTracks = syncData.teacherIds
+              .filter(gid => gid !== syncData.teacherIds[0])
+              .map(gid => {
+                const gt = cls.teachers.find(tt => String(tt._id) === gid);
+                return { groupName: syncData.groupName, teacher: gid, subject: gt ? gt.subject : "" };
+              });
+
+            timetableMap[cid][day].push({
+              period: p,
+              startTime: timeSlotsByClass[cid][p - 1].startTime,
+              endTime: timeSlotsByClass[cid][p - 1].endTime,
+              teacher: ft._id,
+              subject: ft.subject,
+              tracks: leaderTracks,
+            });
+
+            slotClaims[syncData.syncId].add(timeKey);
+            handledCids.add(cid);
+            break; // slot claimed for this sync
+          }
+        }
+
+        // ── SHUFFLED CLASS LOOP ──
         for (const cls of shuffledClasses) {
+          const cid = String(cls._id);
+          if (handledCids.has(cid)) continue;
+
           const periodsPerDay = cls.periodsPerDay || 6;
           if (p > periodsPerDay) continue;
 
-          const cid      = String(cls._id);
           const lastKey  = `${cid}_${day}_${p - 1}`;
           const target   = targetMapByClass[cid];
           const assigned = assignedCount[cid];
-
-          // FIX: use shuffleSort so equal-remaining teachers don't always appear
-          // in the same order → prevents same teacher always in P1 every day
           const sortedTeachers = sortWithShuffle(cls.teachers, target, assigned, `${cid}_${day}`, teacherClassDayCount, explicitQuotaByClass[cid]);
 
           let assignedTeacher = null;
+          let groupAssigned = null;
 
-          for (const t of sortedTeachers) {
-            const tid    = String(t._id);
-            const dayKey = `${tid}_${day}`;
-            const classKey = `${tid}_${cid}_${day}`;
+          const classSyncs = syncByClass[cid] || [];
 
-            // Skip if teacher is absent on this day
-            if (absentTeacherDays.has(`${tid}_${day}`)) continue;
-
-            // Target reached for this teacher in this class → skip
-            if ((assigned[tid] || 0) >= (target[tid] || 0)) continue;
-
-            // Max 4 periods/day per teacher globally
-            if ((teacherDayLoad[dayKey] || 0) >= 4) continue;
-
-            // No back-to-back same teacher in same class
-            if (lastPeriodTeacher[lastKey] && lastPeriodTeacher[lastKey] === tid) continue;
-
-            // No same subject in consecutive periods (spread subjects)
-            const lastTid = lastPeriodTeacher[lastKey];
-            if (lastTid) {
-              const lastTeacher = cls.teachers.find(tt => String(tt._id) === lastTid);
-              if (lastTeacher && t.subject === lastTeacher.subject) continue;
+          // CHECK 1: Sync follower — mirror the leader's placement
+          let syncMatch = null;
+          for (const s of classSyncs) {
+            if (slotClaims[s.syncId].has(timeKey)) {
+              syncMatch = s;
+              break;
             }
-
-            // Max 2 periods per teacher per class per day
-            if ((teacherClassDayCount[classKey] || 0) >= 2) continue;
-
-            // Cross-class conflict
-            if (teacherTimeTable[tid] && teacherTimeTable[tid][timeKey]) continue;
-
-            // ✅ Assign
-            assignedTeacher = t;
-            assigned[tid]          = (assigned[tid]          || 0) + 1;
-            teacherDayLoad[dayKey] = (teacherDayLoad[dayKey] || 0) + 1;
-
-            if (!teacherTimeTable[tid]) teacherTimeTable[tid] = {};
-            teacherTimeTable[tid][timeKey] = true;
-            lastPeriodTeacher[`${cid}_${day}_${p}`] = tid;
-            teacherClassDayCount[classKey] = (teacherClassDayCount[classKey] || 0) + 1;
-
-            break;
+          }
+          if (syncMatch) {
+            let allAvailable = true;
+            for (const gid of syncMatch.teacherIds) {
+              if (absentTeacherDays.has(`${gid}_${day}`)) { allAvailable = false; break; }
+              if ((teacherDayLoad[`${gid}_${day}`] || 0) >= 4) { allAvailable = false; break; }
+              if ((teacherClassDayCount[`${gid}_${cid}_${day}`] || 0) >= 2) { allAvailable = false; break; }
+              if (lastPeriodTeacher[lastKey] && lastPeriodTeacher[lastKey] === gid) { allAvailable = false; break; }
+              // Intentionally NOT checking teacherTimeTable — cross-class sync is expected
+            }
+            if (allAvailable) {
+              const ft = cls.teachers.find(t => String(t._id) === syncMatch.teacherIds[0]);
+              if (ft) {
+                // Follower: update only class-specific tracking, not global
+                for (const gid of syncMatch.teacherIds) {
+                  teacherClassDayCount[`${gid}_${cid}_${day}`] = (teacherClassDayCount[`${gid}_${cid}_${day}`] || 0) + 1;
+                }
+                lastPeriodTeacher[`${cid}_${day}_${p}`] = syncMatch.teacherIds[0];
+                assignedTeacher = ft;
+                groupAssigned = { firstTeacher: ft, teacherIds: syncMatch.teacherIds, groupName: syncMatch.groupName };
+              }
+            }
           }
 
-          // Fallback: if no teacher assigned, find ANY available free teacher
+          // CHECK 2: Normal assignment (group or individual)
           if (!assignedTeacher) {
-            for (const t of cls.teachers) {
+            for (const t of sortedTeachers) {
               const tid    = String(t._id);
               const dayKey = `${tid}_${day}`;
               const classKey = `${tid}_${cid}_${day}`;
 
-              // Skip if teacher is absent on this day
+              const groupInfo = teacherToGroup[cid]?.[tid];
+              if (groupInfo) {
+                let allAvailable = true;
+                for (const gid of groupInfo.teacherIds) {
+                  if (absentTeacherDays.has(`${gid}_${day}`)) { allAvailable = false; break; }
+                  if ((assigned[gid] || 0) >= (target[gid] || 0)) { allAvailable = false; break; }
+                  if ((teacherDayLoad[`${gid}_${day}`] || 0) >= 4) { allAvailable = false; break; }
+                  if (lastPeriodTeacher[lastKey] && lastPeriodTeacher[lastKey] === gid) { allAvailable = false; break; }
+                  if ((teacherClassDayCount[`${gid}_${cid}_${day}`] || 0) >= 2) { allAvailable = false; break; }
+                  if (teacherTimeTable[gid] && teacherTimeTable[gid][timeKey]) { allAvailable = false; break; }
+                }
+                if (!allAvailable) continue;
+
+                for (const gid of groupInfo.teacherIds) {
+                  assigned[gid] = (assigned[gid] || 0) + 1;
+                  teacherDayLoad[`${gid}_${day}`] = (teacherDayLoad[`${gid}_${day}`] || 0) + 1;
+                  if (!teacherTimeTable[gid]) teacherTimeTable[gid] = {};
+                  teacherTimeTable[gid][timeKey] = true;
+                  teacherClassDayCount[`${gid}_${cid}_${day}`] = (teacherClassDayCount[`${gid}_${cid}_${day}`] || 0) + 1;
+                }
+                lastPeriodTeacher[`${cid}_${day}_${p}`] = tid;
+                assignedTeacher = t;
+                groupAssigned = { firstTeacher: t, teacherIds: groupInfo.teacherIds, groupName: groupInfo.groupName };
+                break;
+              }
+
+              if (groupedTeacherIds[cid].has(tid)) continue;
               if (absentTeacherDays.has(`${tid}_${day}`)) continue;
-
-              // Only check if teacher is free at this time (cross-class conflict)
-              if (teacherTimeTable[tid] && teacherTimeTable[tid][timeKey]) continue;
-
-              // Max 2 periods per teacher per class per day
-              if ((teacherClassDayCount[classKey] || 0) >= 2) continue;
-
-              // Max 4 periods/day globally (prevents overloading)
+              if ((assigned[tid] || 0) >= (target[tid] || 0)) continue;
               if ((teacherDayLoad[dayKey] || 0) >= 4) continue;
-
-              // No back-to-back same teacher in same class
               if (lastPeriodTeacher[lastKey] && lastPeriodTeacher[lastKey] === tid) continue;
 
-              // No same subject in consecutive periods
               const lastTid = lastPeriodTeacher[lastKey];
               if (lastTid) {
                 const lastTeacher = cls.teachers.find(tt => String(tt._id) === lastTid);
                 if (lastTeacher && t.subject === lastTeacher.subject) continue;
               }
 
-              // ✅ Fallback assign (exceeds quota but prevents blank periods)
+              if ((teacherClassDayCount[classKey] || 0) >= 2) continue;
+              if (teacherTimeTable[tid] && teacherTimeTable[tid][timeKey]) continue;
+
               assignedTeacher = t;
               assigned[tid]          = (assigned[tid]          || 0) + 1;
               teacherDayLoad[dayKey] = (teacherDayLoad[dayKey] || 0) + 1;
-
               if (!teacherTimeTable[tid]) teacherTimeTable[tid] = {};
               teacherTimeTable[tid][timeKey] = true;
               lastPeriodTeacher[`${cid}_${day}_${p}`] = tid;
               teacherClassDayCount[classKey] = (teacherClassDayCount[classKey] || 0) + 1;
-
               break;
             }
+          }
+
+          // CHECK 3: Fallback
+          if (!assignedTeacher) {
+            for (const t of cls.teachers) {
+              const tid    = String(t._id);
+              const dayKey = `${tid}_${day}`;
+              const classKey = `${tid}_${cid}_${day}`;
+
+              const groupInfo = teacherToGroup[cid]?.[tid];
+              if (groupInfo) {
+                let allAvailable = true;
+                for (const gid of groupInfo.teacherIds) {
+                  if (absentTeacherDays.has(`${gid}_${day}`)) { allAvailable = false; break; }
+                  if (teacherTimeTable[gid] && teacherTimeTable[gid][timeKey]) { allAvailable = false; break; }
+                  if ((teacherClassDayCount[`${gid}_${cid}_${day}`] || 0) >= 2) { allAvailable = false; break; }
+                  if ((teacherDayLoad[`${gid}_${day}`] || 0) >= 4) { allAvailable = false; break; }
+                  if (lastPeriodTeacher[lastKey] && lastPeriodTeacher[lastKey] === gid) { allAvailable = false; break; }
+                }
+                if (!allAvailable) continue;
+
+                for (const gid of groupInfo.teacherIds) {
+                  assigned[gid] = (assigned[gid] || 0) + 1;
+                  teacherDayLoad[`${gid}_${day}`] = (teacherDayLoad[`${gid}_${day}`] || 0) + 1;
+                  if (!teacherTimeTable[gid]) teacherTimeTable[gid] = {};
+                  teacherTimeTable[gid][timeKey] = true;
+                  teacherClassDayCount[`${gid}_${cid}_${day}`] = (teacherClassDayCount[`${gid}_${cid}_${day}`] || 0) + 1;
+                }
+                lastPeriodTeacher[`${cid}_${day}_${p}`] = tid;
+                assignedTeacher = t;
+                groupAssigned = { firstTeacher: t, teacherIds: groupInfo.teacherIds, groupName: groupInfo.groupName };
+                break;
+              }
+
+              if (groupedTeacherIds[cid].has(tid)) continue;
+              if (absentTeacherDays.has(`${tid}_${day}`)) continue;
+              if (teacherTimeTable[tid] && teacherTimeTable[tid][timeKey]) continue;
+              if ((teacherClassDayCount[classKey] || 0) >= 2) continue;
+              if ((teacherDayLoad[dayKey] || 0) >= 4) continue;
+              if (lastPeriodTeacher[lastKey] && lastPeriodTeacher[lastKey] === tid) continue;
+
+              const lastTid = lastPeriodTeacher[lastKey];
+              if (lastTid) {
+                const lastTeacher = cls.teachers.find(tt => String(tt._id) === lastTid);
+                if (lastTeacher && t.subject === lastTeacher.subject) continue;
+              }
+
+              assignedTeacher = t;
+              assigned[tid]          = (assigned[tid]          || 0) + 1;
+              teacherDayLoad[dayKey] = (teacherDayLoad[dayKey] || 0) + 1;
+              if (!teacherTimeTable[tid]) teacherTimeTable[tid] = {};
+              teacherTimeTable[tid][timeKey] = true;
+              lastPeriodTeacher[`${cid}_${day}_${p}`] = tid;
+              teacherClassDayCount[classKey] = (teacherClassDayCount[classKey] || 0) + 1;
+              break;
+            }
+          }
+
+          // Build tracks array if a group was assigned
+          let tracks = [];
+          if (groupAssigned) {
+            tracks = groupAssigned.teacherIds
+              .filter(gid => gid !== String(assignedTeacher._id))
+              .map(gid => {
+                const gt = cls.teachers.find(tt => String(tt._id) === gid);
+                return {
+                  groupName: groupAssigned.groupName,
+                  teacher: gid,
+                  subject: gt ? gt.subject : "",
+                };
+              });
           }
 
           timetableMap[cid][day].push({
@@ -351,6 +542,7 @@ app.post("/generate-timetable", auth, adminOnly, async (req, res) => {
             endTime: timeSlotsByClass[cid][p - 1].endTime,
             teacher: assignedTeacher ? assignedTeacher._id : null,
             subject: assignedTeacher ? assignedTeacher.subject : "Free Period",
+            tracks,
           });
         }
       }
@@ -488,7 +680,8 @@ app.put("/classes/:id/swap-periods", auth, adminOnly, async (req, res) => {
     // Return populated
     const updated = await Class.findById(cls._id)
       .populate("teachers")
-      .populate("timetable.periods.teacher");
+      .populate("timetable.periods.teacher")
+      .populate("timetable.periods.tracks.teacher");
 
     res.json({ message: "Periods swapped successfully", class: updated });
 
@@ -543,7 +736,58 @@ app.delete("/absences/:id", auth, adminOnly, async (req, res) => {
 });
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────
+//  GROUP SYNC ROUTES
+// ─────────────────────────────────────────────
+
+app.get("/group-syncs", auth, async (req, res) => {
+  try {
+    const syncs = await GroupSync.find({ createdBy: req.effectiveCreatedBy })
+      .populate("classIds")
+      .populate("teacherIds");
+    res.json(syncs);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch group syncs" });
+  }
+});
+
+app.post("/group-syncs", auth, adminOnly, async (req, res) => {
+  try {
+    const { classIds, teacherIds, groupName } = req.body;
+    if (!groupName || !groupName.trim()) return res.status(400).json({ error: "Group name is required" });
+    if (!Array.isArray(classIds) || classIds.length < 2) return res.status(400).json({ error: "Select at least 2 classes" });
+    if (!Array.isArray(teacherIds) || teacherIds.length < 2) return res.status(400).json({ error: "Select at least 2 teachers" });
+
+    const syncId = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+
+    const sync = new GroupSync({
+      syncId,
+      groupName: groupName.trim(),
+      classIds,
+      teacherIds,
+      createdBy: req.effectiveCreatedBy,
+    });
+    await sync.save();
+
+    const populated = await GroupSync.findById(sync._id)
+      .populate("classIds")
+      .populate("teacherIds");
+    res.json(populated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create group sync" });
+  }
+});
+
+app.delete("/group-syncs/:syncId", auth, adminOnly, async (req, res) => {
+  try {
+    await GroupSync.findOneAndDelete({ syncId: req.params.syncId, createdBy: req.effectiveCreatedBy });
+    res.json({ message: "Group sync removed" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to remove group sync" });
+  }
+});
+
+// ─────────────────────────────────────────────
 //  QUOTA ROUTES
 // ─────────────────────────────────────────────
 
@@ -734,8 +978,311 @@ app.get("/classes/:id/school-timing", auth, async (req, res) => {
 });
 
 
+// PUT /classes/:id/edit-period — edit a single period's teacher/subject
+app.put("/classes/:id/edit-period", auth, adminOnly, async (req, res) => {
+  try {
+    const { day, period, teacherId, subject, tracks } = req.body;
+    if (!day || !period) {
+      return res.status(400).json({ error: "day and period are required" });
+    }
+
+    const cls = await Class.findOne({ _id: req.params.id, createdBy: req.effectiveCreatedBy });
+    if (!cls) return res.status(404).json({ error: "Class not found" });
+
+    const dayData = cls.timetable.find(d => d.day === day);
+    if (!dayData) return res.status(404).json({ error: "Day not found in timetable" });
+
+    const p = dayData.periods.find(pr => pr.period === period);
+    if (!p) return res.status(404).json({ error: "Period not found" });
+
+    // If changing teacher, validate assignment + check conflicts
+    if (teacherId !== undefined) {
+      if (teacherId) {
+        const teacherExists = cls.teachers.some(t => String(t) === teacherId || String(t._id) === teacherId);
+        if (!teacherExists) {
+          return res.status(400).json({ error: "Teacher not assigned to this class" });
+        }
+
+        // Check if teacher is absent this day
+        const absence = await Absence.findOne({
+          teacher: teacherId,
+          day,
+          createdBy: req.effectiveCreatedBy
+        });
+        if (absence) {
+          const teacherDoc = await Teacher.findById(teacherId).select("name");
+          return res.status(400).json({
+            error: `${teacherDoc?.name || "Teacher"} is marked absent on ${day}`
+          });
+        }
+
+        // Check cross-class conflicts
+        const others = await Class.find({ _id: { $ne: cls._id } }, { timetable: 1, name: 1 });
+        for (const other of others) {
+          const otherDay = other.timetable.find(d => d.day === day);
+          if (!otherDay) continue;
+          const slot = otherDay.periods.find(pr => pr.period === period);
+          if (slot && slot.teacher && String(slot.teacher) === teacherId) {
+            const teacherDoc = await Teacher.findById(teacherId).select("name");
+            return res.status(400).json({
+              error: `Clash: ${teacherDoc?.name || "Teacher"} already teaches ${other.name} at ${day} Period ${period}`
+            });
+          }
+        }
+      }
+      p.teacher = teacherId || null;
+    }
+
+    if (subject !== undefined) {
+      p.subject = subject || "Free Period";
+    }
+
+    // Handle tracks (elective groups)
+    if (tracks !== undefined) {
+      p.tracks = tracks.filter(t => t.groupName && t.groupName.trim());
+      for (const tr of p.tracks) {
+        if (tr.teacher) {
+          const teacherExists = cls.teachers.some(t => String(t) === String(tr.teacher) || String(t._id) === String(tr.teacher));
+          if (!teacherExists) {
+            return res.status(400).json({ error: `Teacher "${tr.teacher}" not assigned to this class` });
+          }
+        }
+        if (!tr.subject) tr.subject = "Free Period";
+      }
+    }
+
+    await cls.save();
+
+    const updated = await Class.findById(cls._id)
+      .populate("teachers")
+      .populate("timetable.periods.teacher")
+      .populate("timetable.periods.tracks.teacher");
+
+    res.json({ message: "Period updated successfully", class: updated });
+  } catch (err) {
+    console.log("EDIT PERIOD ERROR:", err);
+    res.status(500).json({ error: "Failed to edit period" });
+  }
+});
+
 // ─────────────────────────────────────────────
-//  ALL OTHER ROUTES
+//  FULL DATA IMPORT
+// ─────────────────────────────────────────────
+
+app.post("/import", auth, adminOnly, async (req, res) => {
+  try {
+    const { teachers, accounts, classes, timetable, teacherGroups, groupSyncs, absences } = req.body;
+    const result = { teachers: 0, accounts: 0, classes: 0, periods: 0, teacherGroups: 0, groupSyncs: 0, absences: 0, errors: [] };
+
+    // ── 1. Teachers ──
+    const teacherMap = {};
+    for (const t of teachers || []) {
+      const name = (t.name || "").trim();
+      const subject = (t.subject || "").trim();
+      if (!name || !subject) continue;
+      let teacher = await Teacher.findOne({ name: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+      if (!teacher) {
+        teacher = await Teacher.create({ name, subject, createdBy: req.effectiveCreatedBy });
+        result.teachers++;
+      }
+      teacherMap[`${name}_${subject}`] = String(teacher._id);
+    }
+    const allTeachers = await Teacher.find({ createdBy: req.effectiveCreatedBy });
+    for (const t of allTeachers) {
+      teacherMap[`${t.name}_${t.subject}`] = String(t._id);
+    }
+
+    // ── 2. Accounts ──
+    for (const a of accounts || []) {
+      const email = (a.email || "").toLowerCase().trim();
+      if (!email) continue;
+      const existing = await User.findOne({ email });
+      if (existing) continue;
+      const pw = a.password || "school123";
+      const hashed = await bcrypt.hash(pw, 10);
+      const userData = {
+        email,
+        password: hashed,
+        role: a.role || "teacher",
+        schoolName: a.name || a.schoolName || "",
+        createdBy: req.effectiveCreatedBy,
+        plainPassword: pw,
+      };
+      if ((a.role || "").toLowerCase() === "teacher" && a.name && a.subject) {
+        const tid = teacherMap[`${a.name.trim()}_${a.subject.trim()}`];
+        if (tid) userData.teacherRef = tid;
+      }
+      if ((a.role || "").toLowerCase() === "student" && a.className) {
+        const cls = await Class.findOne({ name: { $regex: `^${a.className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+        if (cls) userData.classRef = cls._id;
+      }
+      await User.create(userData);
+      result.accounts++;
+    }
+
+    // ── 3. Classes ──
+    for (const cl of classes || []) {
+      const name = (cl.name || "").trim();
+      if (!name) continue;
+      let cls = await Class.findOne({ name: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+      if (!cls) {
+        cls = new Class({ name, createdBy: req.effectiveCreatedBy });
+        result.classes++;
+      }
+      if (cl.periodsPerDay) cls.periodsPerDay = Number(cl.periodsPerDay);
+      cls.schoolTiming = {
+        startTime: cl.startTime || "08:00",
+        periodDuration: Number(cl.periodDuration) || 40,
+        breakAfter: Number(cl.breakAfter) || 3,
+        breakDuration: Number(cl.breakDuration) || 20,
+      };
+      if (cl.teacherNames) {
+        const names = typeof cl.teacherNames === "string" ? cl.teacherNames.split(",").map(s => s.trim()).filter(Boolean) : cl.teacherNames;
+        for (const tname of names) {
+          const teacher = await Teacher.findOne({ name: { $regex: `^${tname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+          if (teacher && !cls.teachers.some(t => String(t) === String(teacher._id))) {
+            cls.teachers.push(teacher._id);
+          }
+        }
+      }
+      await cls.save();
+    }
+
+    // ── 4. Timetable ──
+    const classMap = {};
+    const allClasses = await Class.find({ createdBy: req.effectiveCreatedBy });
+    for (const c of allClasses) classMap[c.name] = String(c._id);
+
+    if (timetable && timetable.length > 0) {
+      const byClass = {};
+      for (const row of timetable) {
+        const cName = (row.className || row.Class || "").trim();
+        if (!cName || !classMap[cName]) continue;
+        const cid = classMap[cName];
+        if (!byClass[cid]) byClass[cid] = {};
+        const day = row.day || "";
+        if (!byClass[cid][day]) byClass[cid][day] = {};
+        const p = Number(row.period) || 1;
+        if (!byClass[cid][day][p]) byClass[cid][day][p] = { tracks: [] };
+        const entry = byClass[cid][day][p];
+        if (row.teacher || row.subject) {
+          entry.startTime = row.startTime || "";
+          entry.endTime = row.endTime || "";
+          if (row.teacher && row.teacher !== "—") {
+            const t = await Teacher.findOne({ name: { $regex: `^${row.teacher.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+            if (t) entry.teacher = String(t._id);
+          }
+          entry.subject = row.subject || "Free Period";
+        }
+        if (row.groupName) {
+          const tr = { groupName: row.groupName, teacher: null, subject: row.trackSubject || "" };
+          if (row.trackTeacher && row.trackTeacher !== "—") {
+            const tt = await Teacher.findOne({ name: { $regex: `^${row.trackTeacher.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+            if (tt) tr.teacher = String(tt._id);
+          }
+          entry.tracks.push(tr);
+        }
+      }
+
+      for (const cid of Object.keys(byClass)) {
+        const daysArr = [];
+        for (const day of Object.keys(byClass[cid])) {
+          const periodsArr = [];
+          for (const p of Object.keys(byClass[cid][day])) {
+            const entry = byClass[cid][day][p];
+            periodsArr.push({
+              period: Number(p),
+              startTime: entry.startTime || "",
+              endTime: entry.endTime || "",
+              teacher: entry.teacher || null,
+              subject: entry.subject || "Free Period",
+              tracks: entry.tracks || [],
+            });
+            result.periods++;
+          }
+          periodsArr.sort((a, b) => a.period - b.period);
+          daysArr.push({ day, periods: periodsArr });
+        }
+        await Class.findByIdAndUpdate(cid, { $set: { timetable: daysArr } });
+      }
+    }
+
+    // ── 5. Teacher Groups ──
+    for (const tg of teacherGroups || []) {
+      const cName = (tg.className || tg.Class || "").trim();
+      if (!cName) continue;
+      const cls = await Class.findOne({ name: { $regex: `^${cName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+      if (!cls) continue;
+      const tNames = typeof tg.teachers === "string" ? tg.teachers.split(",").map(s => s.trim()).filter(Boolean) : [];
+      const tIds = [];
+      for (const tn of tNames) {
+        const t = await Teacher.findOne({ name: { $regex: `^${tn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+        if (t) tIds.push(t._id);
+      }
+      if (tIds.length >= 2) {
+        const existingIdx = cls.teacherGroups.findIndex(g => g.groupName === tg.groupName);
+        const groupEntry = { groupName: tg.groupName, teachers: tIds };
+        if (existingIdx >= 0) {
+          cls.teacherGroups[existingIdx] = groupEntry;
+        } else {
+          cls.teacherGroups.push(groupEntry);
+        }
+        result.teacherGroups++;
+      }
+      await cls.save();
+    }
+
+    // ── 6. Group Syncs ──
+    for (const gs of groupSyncs || []) {
+      const gName = (gs.groupName || "").trim();
+      if (!gName) continue;
+      const cNames = typeof gs.classes === "string" ? gs.classes.split(",").map(s => s.trim()).filter(Boolean) : [];
+      const cIds = [];
+      for (const cn of cNames) {
+        const c = await Class.findOne({ name: { $regex: `^${cn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+        if (c) cIds.push(c._id);
+      }
+      if (cIds.length < 2) continue;
+      // Find teacher IDs for this group name — look up which teachers are in the group across sync classes
+      const firstClass = await Class.findById(cIds[0]).populate("teacherGroups.teachers");
+      const matchedGroup = firstClass?.teacherGroups.find(g => g.groupName === gName);
+      if (!matchedGroup) continue;
+      const tIds = matchedGroup.teachers.map(t => t._id);
+      const syncId = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      await GroupSync.create({
+        syncId,
+        groupName: gName,
+        classIds: cIds,
+        teacherIds: tIds,
+        createdBy: req.effectiveCreatedBy,
+      });
+      result.groupSyncs++;
+    }
+
+    // ── 7. Absences ──
+    for (const ab of absences || []) {
+      const tName = (ab.teacherName || ab.teacher || "").trim();
+      const day = (ab.day || "").trim();
+      if (!tName || !day) continue;
+      const teacher = await Teacher.findOne({ name: { $regex: `^${tName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+      if (!teacher) continue;
+      await Absence.findOneAndUpdate(
+        { teacher: teacher._id, day, createdBy: req.effectiveCreatedBy },
+        { $set: { teacher: teacher._id, day, createdBy: req.effectiveCreatedBy } },
+        { new: true, upsert: true }
+      );
+      result.absences++;
+    }
+
+    res.json({ message: "Import successful", result });
+  } catch (err) {
+    console.log("IMPORT ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+//  RESET / GENERATE
 // ─────────────────────────────────────────────
 
 app.post("/reset-timetable", auth, adminOnly, async (req, res) => {
@@ -808,6 +1355,41 @@ app.put("/classes/:id/assign-teacher", auth, adminOnly, async (req, res) => {
   res.json(updated);
 });
 
+app.put("/classes/:id/teacher-groups", auth, adminOnly, async (req, res) => {
+  const { groups } = req.body;
+  const cls = await Class.findOne({ _id: req.params.id, createdBy: req.effectiveCreatedBy });
+  if (!cls) return res.status(404).json({ error: "Class not found" });
+
+  if (!Array.isArray(groups)) {
+    return res.status(400).json({ error: "groups must be an array" });
+  }
+
+  const assignedIds = new Set(cls.teachers.map(t => String(t._id)));
+
+  for (const g of groups) {
+    if (!g.groupName || !g.groupName.trim()) {
+      return res.status(400).json({ error: "Each group needs a name" });
+    }
+    if (!Array.isArray(g.teacherIds) || g.teacherIds.length < 2) {
+      return res.status(400).json({ error: `Group "${g.groupName}" needs at least 2 teachers` });
+    }
+    for (const tid of g.teacherIds) {
+      if (!assignedIds.has(String(tid))) {
+        return res.status(400).json({ error: `Teacher ${tid} is not assigned to this class` });
+      }
+    }
+  }
+
+  cls.teacherGroups = groups.map(g => ({
+    groupName: g.groupName.trim(),
+    teachers: g.teacherIds,
+  }));
+
+  await cls.save();
+  const updated = await Class.findById(cls._id).populate("teacherGroups.teachers");
+  res.json(updated);
+});
+
 app.delete("/teachers/:id", auth, adminOnly, async (req, res) => {
   await Absence.deleteMany({ teacher: req.params.id, createdBy: req.effectiveCreatedBy });
   await Teacher.findOneAndDelete({ _id: req.params.id, createdBy: req.effectiveCreatedBy });
@@ -831,7 +1413,9 @@ app.post("/classes", auth, adminOnly, async (req, res) => {
 app.get("/classes", auth, async (req, res) => {
   const classes = await Class.find({ createdBy: req.effectiveCreatedBy })
     .populate("teachers")
-    .populate("timetable.periods.teacher");
+    .populate("teacherGroups.teachers")
+    .populate("timetable.periods.teacher")
+    .populate("timetable.periods.tracks.teacher");
 
   // Convert Mongoose Maps to plain objects before sending to frontend
   const result = classes.map(c => {
@@ -841,6 +1425,23 @@ app.get("/classes", auth, async (req, res) => {
   });
 
   res.json(result);
+});
+
+// GET /classes/:id — single class (for students)
+app.get("/classes/:id", auth, async (req, res) => {
+  try {
+    const cls = await Class.findById(req.params.id)
+      .populate("teachers")
+      .populate("teacherGroups.teachers")
+      .populate("timetable.periods.teacher")
+      .populate("timetable.periods.tracks.teacher");
+    if (!cls) return res.status(404).json({ error: "Class not found" });
+    const obj = cls.toObject();
+    obj.teacherQuota = toPlainQuota(cls.teacherQuota);
+    res.json(obj);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch class" });
+  }
 });
 
 app.put("/teachers/:id", auth, adminOnly, async (req, res) => {
@@ -878,7 +1479,8 @@ app.get("/export-pdf/:classId", auth, async (req, res) => {
   try {
     const cls = await Class.findOne({ _id: req.params.classId, createdBy: req.effectiveCreatedBy })
       .populate("teachers")
-      .populate("timetable.periods.teacher");
+      .populate("timetable.periods.teacher")
+      .populate("timetable.periods.tracks.teacher");
 
     if (!cls) return res.status(404).json({ error: "Class not found" });
 

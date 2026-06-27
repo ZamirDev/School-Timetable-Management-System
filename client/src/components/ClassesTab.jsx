@@ -21,6 +21,7 @@ export default function ClassesTab({
   deleteClass,
   assignTeacher,
   removeTeacher,
+  saveTeacherGroups,
   saveQuota,
   clearTeacherQuota,
   savePpd,
@@ -48,7 +49,7 @@ export default function ClassesTab({
       {isAdmin && (
       <div style={{ ...cardStyle, marginBottom: "16px", padding: "16px" }}>
         <h2 style={{ margin: "0 0 12px 0", fontSize: "20px", fontWeight: "700", color: "var(--text-primary)" }}>➕ Add New Class</h2>
-        <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+        <div className="flex-row" style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
             <input
               placeholder="Class name (e.g. 10A)"
@@ -75,7 +76,7 @@ export default function ClassesTab({
       <div style={{ ...cardStyle, marginBottom: "16px", padding: "16px" }}>
         <h2 style={{ margin: "0 0 12px 0", fontSize: "20px", fontWeight: "700", color: "var(--text-primary)" }}>⏰ School Timing & Breaks (All Classes)</h2>
         
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+        <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <div>
             <label style={{ fontSize: "13px", color: "#475569", display: "block", marginBottom: "4px", fontWeight: "600" }}>
               Start Time
@@ -208,6 +209,7 @@ export default function ClassesTab({
                 handleQuotaChange={handleQuotaChange}
                 assignTeacher={assignTeacher}
                 removeTeacher={removeTeacher}
+                saveTeacherGroups={saveTeacherGroups}
                 saveQuota={saveQuota}
                 clearTeacherQuota={clearTeacherQuota}
                 savePpd={savePpd}

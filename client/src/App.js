@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { apiFetch } from "./utils/api";
 import Header from "./components/Header";
 import Login from "./components/Login";
+import ForgotPassword from "./components/ForgotPassword";
 import Tabs from "./components/Tabs";
 import Timetable from "./components/Timetable";
 import ClassesTab from "./components/ClassesTab";
@@ -12,6 +13,7 @@ import AccountManagement from "./components/AccountManagement";
 import TeacherDashboard from "./components/TeacherDashboard";
 import LeaveRequestsPanel from "./components/LeaveRequestsPanel";
 import MyTimetable from "./components/MyTimetable";
+import GroupSyncPanel from "./components/GroupSyncPanel";
 import {
   validateClass,
   validatePeriodsPerDay,
@@ -24,7 +26,13 @@ import {
 function AppContent() {
   const { user, loading, logout } = useAuth();
 
-  const [currentTab, setCurrentTab] = useState(user?.role === "teacher" ? "my-timetable" : "timetable");
+  const [authPage, setAuthPage] = useState("login");
+
+  const [currentTab, setCurrentTab] = useState(
+    user?.role === "teacher" ? "my-timetable" :
+    user?.role === "student" ? "timetable" :
+    "timetable"
+  );
   const [configuring, setConfiguring] = useState(null);
 
   // Teachers
@@ -244,6 +252,14 @@ function AppContent() {
     fetchClasses();
   };
 
+  const saveTeacherGroups = async (classId, groups) => {
+    await apiFetch(`/classes/${classId}/teacher-groups`, {
+      method: "PUT",
+      body: JSON.stringify({ groups }),
+    });
+    fetchClasses();
+  };
+
   // ─────────────────────────────────────
   //  PERIODS PER DAY
   // ─────────────────────────────────────
@@ -430,21 +446,29 @@ function AppContent() {
 
           const teacherId = String(period.teacher._id || period.teacher);
           const tname = period.teacher.name || "Unknown";
+          const tracks = (period.tracks || []).map(t => ({
+            teacher: String(t.teacher?._id || t.teacher),
+            groupName: t.groupName,
+          }));
 
           if (!assignedTeachers[teacherId]) {
             assignedTeachers[teacherId] = { name: tname, classes: [] };
           }
-          assignedTeachers[teacherId].classes.push(cls.name);
+          assignedTeachers[teacherId].classes.push({ cls: cls.name, tracks });
         }
 
         for (const [, data] of Object.entries(assignedTeachers)) {
           if (data.classes.length > 1) {
-            foundConflicts.push({
-              day,
-              period: p,
-              teacher: data.name,
-              classes: data.classes
-            });
+            const trackStrs = data.classes.map(c => JSON.stringify(c.tracks));
+            const allSameTracks = trackStrs.every(s => s === trackStrs[0]);
+            if (!allSameTracks) {
+              foundConflicts.push({
+                day,
+                period: p,
+                teacher: data.name,
+                classes: data.classes.map(c => c.cls),
+              });
+            }
           }
         }
       }
@@ -461,19 +485,24 @@ function AppContent() {
     );
   }
 
-  if (!user) return <Login />;
+  if (!user) {
+    if (authPage === "forgot-password") {
+      return <ForgotPassword onBack={() => setAuthPage("login")} />;
+    }
+    return <Login onForgot={() => setAuthPage("forgot-password")} />;
+  }
 
   return (
     <div style={{ background: "var(--bg-page)", minHeight: "100vh", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} user={user} onLogout={logout} />
 
       <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "0 20px", paddingTop: "20px" }}>
-        <div style={{ display: "flex", gap: "24px" }}>
+        <div className="app-layout" style={{ display: "flex", gap: "24px" }}>
           {/* SIDEBAR */}
           <Tabs currentTab={currentTab} setCurrentTab={setCurrentTab} role={user?.role} />
 
           {/* MAIN CONTENT */}
-          <div style={{ flex: 1 }}>
+          <div className="main-content" style={{ flex: 1, minWidth: 0 }}>
             {user?.role === "teacher" && currentTab === "my-timetable" && (
               <MyTimetable user={user} classes={classes} teachers={teachers} />
             )}
@@ -501,10 +530,11 @@ function AppContent() {
                 conflictsChecked={conflictsChecked}
                 setConflictsChecked={setConflictsChecked}
                 role={user?.role}
+                studentClassRef={user?.role === "student" ? user.classRef : null}
               />
             )}
 
-            {currentTab === "classes" && (
+            {user?.role !== "student" && currentTab === "classes" && (
               <ClassesTab
                 classes={classes}
                 className={className}
@@ -524,6 +554,7 @@ function AppContent() {
                 deleteClass={deleteClass}
                 assignTeacher={assignTeacher}
                 removeTeacher={removeTeacher}
+                saveTeacherGroups={saveTeacherGroups}
                 saveQuota={saveQuota}
                 clearTeacherQuota={clearTeacherQuota}
                 savePpd={savePpd}
@@ -540,7 +571,7 @@ function AppContent() {
               />
             )}
 
-            {currentTab === "teachers" && (
+            {user?.role !== "student" && currentTab === "teachers" && (
               <TeacherTabs
                 teachers={teachers}
                 tName={tName}
@@ -558,7 +589,7 @@ function AppContent() {
               />
             )}
 
-            {currentTab === "absences" && (
+            {user?.role !== "student" && currentTab === "absences" && (
               <AbsencesTab
                 absences={absences}
                 teachers={teachers}
@@ -575,6 +606,9 @@ function AppContent() {
             )}
             {user?.role === "admin" && currentTab === "accounts" && (
               <AccountManagement />
+            )}
+            {user?.role === "admin" && currentTab === "sync-groups" && (
+              <GroupSyncPanel classes={classes} teachers={teachers} apiFetch={apiFetch} role={user?.role} />
             )}
           </div>
         </div>

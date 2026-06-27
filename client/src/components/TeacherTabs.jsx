@@ -31,6 +31,7 @@ export default function TeacherTabs({
         <h2 style={{ margin: "0 0 20px 0", fontSize: "22px", fontWeight: "700", color: "var(--text-primary)" }}>➕ Add New Teacher</h2>
         <form
           onSubmit={submitTeacher}
+          className="form-grid-3"
           style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "12px", alignItems: "flex-end" }}
         >
           <div>
