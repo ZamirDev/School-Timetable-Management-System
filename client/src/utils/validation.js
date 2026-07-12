@@ -48,8 +48,6 @@ export const validateSchoolTiming = ({ timing, periodsPerDay }) => {
   const errors = {};
   const totalPeriods = Number(periodsPerDay);
   const periodDuration = Number(timing?.periodDuration);
-  const breakAfter = Number(timing?.breakAfter);
-  const breakDuration = Number(timing?.breakDuration);
 
   if (isBlank(timing?.startTime)) {
     errors.startTime = "Start time is required";
@@ -59,12 +57,33 @@ export const validateSchoolTiming = ({ timing, periodsPerDay }) => {
     errors.periodDuration = "Invalid period duration";
   }
 
-  if (!isWholeNumber(timing?.breakAfter) || breakAfter < 1 || breakAfter > totalPeriods) {
-    errors.breakAfter = "Break must be within total periods";
-  }
-
-  if (!isWholeNumber(timing?.breakDuration) || breakDuration < 5 || breakDuration > 60) {
-    errors.breakDuration = "Invalid break duration";
+  if (timing?.breaks && Array.isArray(timing.breaks) && timing.breaks.length > 0) {
+    const seen = new Set();
+    timing.breaks.forEach((b, i) => {
+      const prefix = `breaks[${i}]`;
+      if (!isWholeNumber(b.after) || Number(b.after) < 1 || Number(b.after) > totalPeriods) {
+        errors[`${prefix}.after`] = `Position must be 1-${totalPeriods}`;
+      }
+      if (!isWholeNumber(b.duration) || Number(b.duration) < 5 || Number(b.duration) > 60) {
+        errors[`${prefix}.duration`] = "Duration must be 5-60 min";
+      }
+      if (isBlank(b.label)) {
+        errors[`${prefix}.label`] = "Label required";
+      }
+      if (seen.has(b.after)) {
+        errors[`${prefix}.after`] = `Duplicate position at period ${b.after}`;
+      }
+      seen.add(b.after);
+    });
+  } else {
+    const breakAfter = Number(timing?.breakAfter);
+    const breakDuration = Number(timing?.breakDuration);
+    if (!isWholeNumber(timing?.breakAfter) || breakAfter < 1 || breakAfter > totalPeriods) {
+      errors.breakAfter = "Break must be within total periods";
+    }
+    if (!isWholeNumber(timing?.breakDuration) || breakDuration < 5 || breakDuration > 60) {
+      errors.breakDuration = "Invalid break duration";
+    }
   }
 
   return errors;

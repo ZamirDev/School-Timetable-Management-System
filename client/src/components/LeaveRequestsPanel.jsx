@@ -41,9 +41,9 @@ export default function LeaveRequestsPanel() {
 
   const statusBadge = (status) => {
     const styles = {
-      pending: { bg: "#fef3c7", color: "#92400e", text: "🟡 Pending" },
-      approved: { bg: "#f0fdf4", color: "#0f766e", text: "✅ Approved" },
-      rejected: { bg: "#fef2f2", color: "#dc2626", text: "❌ Rejected" },
+      pending: { bg: "#fef3c7", color: "#92400e", text: "Pending" },
+      approved: { bg: "#f0fdf4", color: "#0f766e", text: "Approved" },
+      rejected: { bg: "#fef2f2", color: "#dc2626", text: "Rejected" },
     };
     const s = styles[status] || styles.pending;
     return (
@@ -105,7 +105,7 @@ export default function LeaveRequestsPanel() {
                   {statusBadge(r.status)}
                 </div>
                 <p style={{ margin: "0 0 6px 0", color: "var(--text-primary)", fontSize: "15px" }}>
-                  <strong>Day:</strong> {r.day}
+                  <strong>Days:</strong> {r.startDay ? (r.startDay === r.endDay ? r.startDay : `${r.startDay} - ${r.endDay}`) : r.day}
                 </p>
                 <p style={{ margin: "0 0 6px 0", color: "var(--text-secondary)", fontSize: "15px" }}>
                   <strong>Reason:</strong> {r.reason || "No reason given"}
@@ -132,7 +132,7 @@ export default function LeaveRequestsPanel() {
                           cursor: actingId === r._id ? "not-allowed" : "pointer",
                         }}
                       >
-                        {actingId === r._id ? "..." : "✅ Approve"}
+                        {actingId === r._id ? "..." : "Approve"}
                       </button>
                       <input
                         placeholder="Reason for rejection (optional)"
@@ -161,7 +161,7 @@ export default function LeaveRequestsPanel() {
                           cursor: actingId === r._id ? "not-allowed" : "pointer",
                         }}
                       >
-                        {actingId === r._id ? "..." : "❌ Reject"}
+                        {actingId === r._id ? "..." : "Reject"}
                       </button>
                   </div>
                 )}

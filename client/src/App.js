@@ -14,6 +14,7 @@ import TeacherDashboard from "./components/TeacherDashboard";
 import LeaveRequestsPanel from "./components/LeaveRequestsPanel";
 import MyTimetable from "./components/MyTimetable";
 import GroupSyncPanel from "./components/GroupSyncPanel";
+import { Toaster, toast } from "react-hot-toast";
 import {
   validateClass,
   validatePeriodsPerDay,
@@ -50,7 +51,7 @@ function AppContent() {
   const [selTeacher, setSelTeacher] = useState({});
   const [quotaInputs, setQuotaInputs] = useState({});
   const [ppd, setPpd] = useState({});
-  const [schoolTiming, setSchoolTiming] = useState({ startTime: "08:00", periodDuration: 40, breakAfter: 3, breakDuration: 20 });
+  const [schoolTiming, setSchoolTiming] = useState({ startTime: "08:00", periodDuration: 40, breakAfter: 3, breakDuration: 20, breaks: [{ after: 3, duration: 20, label: "Break" }] });
 
   // Timetable
   const [quotaSummary, setQuotaSummary] = useState(null);
@@ -114,6 +115,10 @@ function AppContent() {
     });
 
     const firstClassTiming = data[0]?.schoolTiming || { startTime: "08:00", periodDuration: 40, breakAfter: 3, breakDuration: 20 };
+    // Migrate legacy single-break to multi-break
+    if (!firstClassTiming.breaks || firstClassTiming.breaks.length === 0) {
+      firstClassTiming.breaks = [{ after: firstClassTiming.breakAfter || 3, duration: firstClassTiming.breakDuration || 20, label: "Break" }];
+    }
     setSchoolTiming(firstClassTiming);
 
   }, []);
@@ -314,23 +319,51 @@ function AppContent() {
       body: JSON.stringify({
         startTime: timing.startTime,
         periodDuration: Number(timing.periodDuration),
-        breakAfter: Number(timing.breakAfter),
-        breakDuration: Number(timing.breakDuration),
+        breaks: (timing.breaks || []).map(b => ({
+          after: Number(b.after),
+          duration: Number(b.duration),
+          label: b.label
+        }))
       }),
     });
     if (res.ok) {
-      alert("School timing updated for all classes! Please regenerate timetable.");
+      toast.success("School timing updated for all classes! Please regenerate timetable.");
       fetchClasses();
     } else {
-      alert("Failed to save school timing");
+      toast.error("Failed to save school timing");
     }
   };
 
   const updateSchoolTiming = (field, value) => {
-    setSchoolTiming(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setSchoolTiming(prev => {
+      if (field.includes(".")) {
+        const parts = field.split(".");
+        const newVal = { ...prev };
+        let cur = newVal;
+        for (let i = 0; i < parts.length - 1; i++) {
+          const key = parts[i];
+          const nextKey = parts[i + 1];
+          if (Array.isArray(cur[key])) {
+            const idx = parseInt(nextKey, 10);
+            if (!isNaN(idx)) {
+              cur = cur[key];
+              cur[idx] = { ...(cur[idx] || {}) };
+              cur = cur[idx];
+              i++;
+            } else {
+              cur[key] = { ...(cur[key] || {}) };
+              cur = cur[key];
+            }
+          } else {
+            cur[key] = { ...(cur[key] || {}) };
+            cur = cur[key];
+          }
+        }
+        cur[parts[parts.length - 1]] = value;
+        return newVal;
+      }
+      return { ...prev, [field]: value };
+    });
   };
 
   const validateSchoolTimingField = (field) => {
@@ -502,7 +535,7 @@ function AppContent() {
           <Tabs currentTab={currentTab} setCurrentTab={setCurrentTab} role={user?.role} />
 
           {/* MAIN CONTENT */}
-          <div className="main-content" style={{ flex: 1, minWidth: 0 }}>
+          <div key={currentTab} className="main-content animate__animated animate__fadeIn" style={{ flex: 1, minWidth: 0 }}>
             {user?.role === "teacher" && currentTab === "my-timetable" && (
               <MyTimetable user={user} classes={classes} teachers={teachers} />
             )}
@@ -620,6 +653,12 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
+      <Toaster position="top-right" toastOptions={{
+        duration: 3000,
+        style: { borderRadius: "10px", padding: "12px 16px", fontSize: "15px" },
+        success: { iconTheme: { primary: "#0f766e", secondary: "#fff" } },
+        error: { iconTheme: { primary: "#dc2626", secondary: "#fff" } },
+      }} />
       <AppContent />
     </AuthProvider>
   );

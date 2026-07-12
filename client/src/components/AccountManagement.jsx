@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { cardStyle, buttonPrimary } from "../utils/styles";
 import { apiFetch } from "../utils/api";
+import toast from "react-hot-toast";
 import BulkImport from "./BulkImport";
 
 export default function AccountManagement() {
@@ -13,9 +14,9 @@ export default function AccountManagement() {
   const [subject, setSubject] = useState("");
   const [classRef, setClassRef] = useState("");
   const [classes, setClasses] = useState([]);
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetchUsers = async () => {
     const res = await apiFetch("/auth/users");
@@ -32,10 +33,9 @@ export default function AccountManagement() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    setError("");
-    if (!email || !password) { setError("Email and password required"); return; }
-    if (role === "teacher" && (!name || !subject)) { setError("Teacher name and subject are required"); return; }
-    if (role === "student" && !classRef) { setError("Class selection is required"); return; }
+    if (!email || !password) { toast.error("Email and password required"); return; }
+    if (role === "teacher" && (!name || !subject)) { toast.error("Teacher name and subject are required"); return; }
+    if (role === "student" && !classRef) { toast.error("Class selection is required"); return; }
     setBusy(true);
     try {
       const body = { email, password, role, schoolName };
@@ -46,12 +46,13 @@ export default function AccountManagement() {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to create user"); return; }
+      if (!res.ok) { toast.error(data.error || "Failed to create user"); return; }
+      toast.success("User created successfully");
       setEmail(""); setPassword(""); setSchoolName(""); setRole("teacher");
       setName(""); setSubject(""); setClassRef("");
       await fetchUsers();
     } catch {
-      setError("Failed to create user");
+      toast.error("Failed to create user");
     } finally {
       setBusy(false);
     }
@@ -64,7 +65,7 @@ export default function AccountManagement() {
       await fetchUsers();
     } else {
       const data = await res.json();
-      setError(data.error || "Failed to delete user");
+      toast.error(data.error || "Failed to delete user");
     }
   };
 
@@ -74,19 +75,6 @@ export default function AccountManagement() {
         <h2 style={{ margin: "0 0 20px 0", fontSize: "22px", fontWeight: "700", color: "var(--text-primary)" }}>
           Create New User
         </h2>
-
-        {error && (
-          <div style={{
-            background: "#fef2f2",
-            color: "#dc2626",
-            padding: "10px 14px",
-            borderRadius: "8px",
-            fontSize: "15px",
-            marginBottom: "16px",
-          }}>
-            {error}
-          </div>
-        )}
 
         <form onSubmit={handleCreate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
@@ -114,22 +102,59 @@ export default function AccountManagement() {
             <label style={{ display: "block", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
               Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                border: "1px solid var(--border, #e2e8f0)",
-                fontSize: "14px",
-                outline: "none",
-                boxSizing: "border-box",
-                background: "var(--bg-input, white)",
-                color: "var(--text-primary, #0f172a)",
-              }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 40px 10px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border, #e2e8f0)",
+                  fontSize: "14px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  background: "var(--bg-input, white)",
+                  color: "var(--text-primary, #0f172a)",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                style={{
+                  position: "absolute",
+                  right: "8px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: 0.6,
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+                onMouseLeave={e => e.currentTarget.style.opacity = "0.6"}
+              >
+                {showPassword ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
           <div>
             <label style={{ display: "block", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
@@ -158,7 +183,7 @@ export default function AccountManagement() {
           {role === "student" && (
             <div>
               <label style={{ display: "block", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
-                📚 Assign Class
+                Assign Class
               </label>
               <select
                 value={classRef}
@@ -280,7 +305,7 @@ export default function AccountManagement() {
           gap: "8px",
         }}
       >
-        📦 {showBulkImport ? "Close Bulk Import" : "Bulk Import from Spreadsheet"}
+        {showBulkImport ? "Close Bulk Import" : "Bulk Import from Spreadsheet"}
       </button>
 
       {showBulkImport && <BulkImport classes={classes} />}
@@ -288,7 +313,7 @@ export default function AccountManagement() {
       {/* TEACHERS SECTION */}
       <div style={cardStyle}>
         <h2 style={{ margin: "0 0 20px 0", fontSize: "22px", fontWeight: "700", color: "var(--text-primary)" }}>
-          👨‍🏫 Teachers ({users.filter(u => u.role === "teacher").length})
+          Teachers ({users.filter(u => u.role === "teacher").length})
         </h2>
 
         {users.filter(u => u.role === "teacher").length === 0 ? (
@@ -298,12 +323,12 @@ export default function AccountManagement() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "15px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid var(--border, #e2e8f0)" }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>👤 Email</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>📛 Name</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>📖 Subject</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>🏫 School</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>📅 Created</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>⚙️ Actions</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Email</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Name</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Subject</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>School</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Created</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -337,7 +362,66 @@ export default function AccountManagement() {
                         onMouseLeave={e => e.target.style.background = "none"}
                         title="Delete user and all their data"
                       >
-                        🗑️
+                        X
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ADMINS SECTION */}
+      <div style={cardStyle}>
+        <h2 style={{ margin: "0 0 20px 0", fontSize: "22px", fontWeight: "700", color: "var(--text-primary)" }}>
+          Admins ({users.filter(u => u.role === "admin").length})
+        </h2>
+
+        {users.filter(u => u.role === "admin").length === 0 ? (
+          <p style={{ color: "var(--text-secondary)", fontSize: "16px" }}>No admin accounts yet.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "15px" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid var(--border, #e2e8f0)" }}>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Email</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Name</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>School</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Created</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.filter(u => u.role === "admin").map(u => (
+                  <tr key={u._id} style={{ borderBottom: "1px solid var(--border, #e2e8f0)" }}>
+                    <td style={{ padding: "10px 12px", color: "var(--text-primary)", fontWeight: 600 }}>{u.email}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-primary)" }}>
+                      <strong>{u.schoolName || "—"}</strong>
+                    </td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-secondary)" }}>{u.schoolName || "—"}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-secondary)" }}>
+                      {new Date(u.createdAt).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                      <button
+                        onClick={() => handleDelete(u._id, u.email)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#ef4444",
+                          cursor: "pointer",
+                          fontSize: "20px",
+                          padding: "4px 8px",
+                          borderRadius: "6px",
+                          lineHeight: 1,
+                        }}
+                        onMouseEnter={e => e.target.style.background = "#fef2f2"}
+                        onMouseLeave={e => e.target.style.background = "none"}
+                        title="Delete user and all their data"
+                      >
+                        X
                       </button>
                     </td>
                   </tr>
@@ -351,7 +435,7 @@ export default function AccountManagement() {
       {/* STUDENTS SECTION */}
       <div style={cardStyle}>
         <h2 style={{ margin: "0 0 20px 0", fontSize: "22px", fontWeight: "700", color: "var(--text-primary)" }}>
-          🎒 Students ({users.filter(u => u.role === "student").length})
+          Students ({users.filter(u => u.role === "student").length})
         </h2>
 
         {users.filter(u => u.role === "student").length === 0 ? (
@@ -361,11 +445,11 @@ export default function AccountManagement() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "15px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid var(--border, #e2e8f0)" }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>👤 Email</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>📛 Name</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>📚 Class</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>📅 Created</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>⚙️ Actions</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Email</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Name</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Class</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Created</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -398,7 +482,7 @@ export default function AccountManagement() {
                         onMouseLeave={e => e.target.style.background = "none"}
                         title="Delete user and all their data"
                       >
-                        🗑️
+                        X
                       </button>
                     </td>
                   </tr>

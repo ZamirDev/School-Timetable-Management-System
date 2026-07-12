@@ -98,7 +98,7 @@ export default function GroupSyncPanel({ classes, teachers, apiFetch, role }) {
       {/* Title */}
       <div style={{ ...cardStyle, marginBottom: "16px", padding: "16px" }}>
         <h2 style={{ margin: "0 0 6px 0", fontSize: "20px", fontWeight: "700", color: "var(--text-primary)" }}>
-          🔗 Sync Groups Across Classes
+          Sync Groups Across Classes
         </h2>
         <p style={{ margin: 0, fontSize: "14px", color: "var(--text-secondary)" }}>
           Link the same teacher group across two classes so they always share the same time slot.
@@ -188,12 +188,12 @@ export default function GroupSyncPanel({ classes, teachers, apiFetch, role }) {
           <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
             {teachersMatch ? (
               <>
-                <span style={{ color: "#10b981", fontSize: "18px" }}>✅</span>
+                <span style={{ color: "#10b981", fontSize: "18px", fontWeight: "bold" }}>[OK]</span>
                 <span style={{ fontSize: "14px", color: "#0f766e", fontWeight: 600 }}>Groups match! Ready to sync.</span>
               </>
             ) : (
               <>
-                <span style={{ color: "#f59e0b", fontSize: "18px" }}>⚠️</span>
+                <span style={{ color: "#f59e0b", fontSize: "18px", fontWeight: "bold" }}>[!]</span>
                 <span style={{ fontSize: "14px", color: "#92400e", fontWeight: 600 }}>Groups don't have the same teachers.</span>
               </>
             )}
@@ -212,7 +212,7 @@ export default function GroupSyncPanel({ classes, teachers, apiFetch, role }) {
             cursor: teachersMatch ? "pointer" : "not-allowed",
           }}
         >
-          🔗 Sync Selected Groups
+          Sync Selected Groups
         </button>
 
         {msg && (

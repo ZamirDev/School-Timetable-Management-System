@@ -93,7 +93,7 @@ export default function BulkImport({ classes }) {
     <div style={{ marginTop: "24px" }}>
       <div style={{ ...cardStyle, padding: "20px" }}>
         <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", fontWeight: "700", color: "var(--text-primary)" }}>
-          📦 Bulk Import from Spreadsheet
+          Bulk Import from Spreadsheet
         </h3>
 
         <p style={{ margin: "0 0 12px 0", fontSize: "14px", color: "var(--text-secondary)" }}>
@@ -122,7 +122,7 @@ export default function BulkImport({ classes }) {
               transition: "all 0.2s",
             }}
           >
-            <p style={{ margin: "0 0 8px 0", fontSize: "28px" }}>📄</p>
+            <p style={{ margin: "0 0 8px 0", fontSize: "28px" }}>[file]</p>
             <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: "600", color: "var(--text-primary)" }}>
               Click or drag a spreadsheet here
             </p>
@@ -156,7 +156,7 @@ export default function BulkImport({ classes }) {
                   borderRadius: "4px",
                 }}
               >
-                ✕ Clear
+                Clear
               </button>
             </div>
 
@@ -200,7 +200,7 @@ export default function BulkImport({ classes }) {
               <div>
                 {result.error ? (
                   <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "14px", marginBottom: "12px" }}>
-                    <p style={{ margin: 0, color: "#dc2626", fontWeight: 600, fontSize: "15px" }}>❌ {result.error}</p>
+                    <p style={{ margin: 0, color: "#dc2626", fontWeight: 600, fontSize: "15px" }}>Error: {result.error}</p>
                   </div>
                 ) : (
                   <>
@@ -212,9 +212,9 @@ export default function BulkImport({ classes }) {
                       marginBottom: "12px",
                     }}>
                       <p style={{ margin: 0, color: result.imported > 0 ? "#0f766e" : "#92400e", fontWeight: 600, fontSize: "15px" }}>
-                        ✅ Imported {result.imported}
-                        {result.skipped > 0 ? ` · ⚠️ Skipped ${result.skipped} (already exist)` : ""}
-                        {result.errors.length > 0 ? ` · ❌ ${result.errors.length} error${result.errors.length > 1 ? "s" : ""}` : ""}
+                        Imported {result.imported}
+                        {result.skipped > 0 ? ` · Skipped ${result.skipped} (already exist)` : ""}
+                        {result.errors.length > 0 ? ` · ${result.errors.length} error${result.errors.length > 1 ? "s" : ""}` : ""}
                       </p>
                     </div>
 
@@ -248,7 +248,7 @@ export default function BulkImport({ classes }) {
                   fontSize: "16px",
                 }}
               >
-                {importing ? "⏳ Importing..." : `🚀 Import ${rows.length} Record${rows.length !== 1 ? "s" : ""}`}
+                {importing ? "Importing..." : `Import ${rows.length} Record${rows.length !== 1 ? "s" : ""}`}
               </button>
             )}
           </>

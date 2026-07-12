@@ -1,4 +1,5 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
 
 const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
@@ -6,17 +7,15 @@ export default function ResetPassword({ onBack }) {
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    if (!token) { setError("Reset token is required"); return; }
-    if (!password) { setError("New password is required"); return; }
-    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
-    if (password !== confirm) { setError("Passwords do not match"); return; }
+    if (!token) { toast.error("Reset token is required"); return; }
+    if (!password) { toast.error("New password is required"); return; }
+    if (password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    if (password !== confirm) { toast.error("Passwords do not match"); return; }
     setBusy(true);
     try {
       const res = await fetch(`${API}/auth/reset-password`, {
@@ -26,9 +25,10 @@ export default function ResetPassword({ onBack }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      toast.success("Password reset successfully");
       setDone(true);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setBusy(false);
     }
@@ -51,7 +51,7 @@ export default function ResetPassword({ onBack }) {
           width: "400px",
           textAlign: "center",
         }}>
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>✅</div>
+          <div style={{ fontSize: "32px", marginBottom: "16px", fontWeight: "bold", color: "#10b981" }}>OK</div>
           <h2 style={{ margin: "0 0 8px 0", color: "var(--text-primary, #0f172a)" }}>
             Password Reset Successful
           </h2>
@@ -108,19 +108,6 @@ export default function ResetPassword({ onBack }) {
         }}>
           Enter your reset token and new password
         </p>
-
-        {error && (
-          <div style={{
-            background: "#fef2f2",
-            color: "#dc2626",
-            padding: "10px 14px",
-            borderRadius: "8px",
-            fontSize: "15px",
-            marginBottom: "16px",
-          }}>
-            {error}
-          </div>
-        )}
 
         <div style={{ marginBottom: "16px" }}>
           <label style={{
@@ -243,7 +230,7 @@ export default function ResetPassword({ onBack }) {
             cursor: "pointer",
           }}
         >
-          ← Back to Login
+          Back to Login
         </button>
       </form>
     </div>

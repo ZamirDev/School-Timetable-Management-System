@@ -16,3 +16,44 @@ code {
 @media (max-width: 768px) {
   input, select, textarea { box-sizing: border-box; }
 }
+
+/* Button hover effects */
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+button:active:not(:disabled) {
+  transform: translateY(0px);
+}
+
+/* Card fade-in animation */
+.fade-in-card,
+div[class*="cardStyle"],
+div[style*="border-radius: clamp(8px, 2vw, 12px)"] {
+  animation: fadeInUp 0.4s ease both;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Stagger: each card delays slightly */
+div[class*="cardStyle"]:nth-child(2),
+div[style*="border-radius: clamp(8px, 2vw, 12px)"]:nth-child(2) {
+  animation-delay: 0.08s;
+}
+div[class*="cardStyle"]:nth-child(3),
+div[style*="border-radius: clamp(8px, 2vw, 12px)"]:nth-child(3) {
+  animation-delay: 0.15s;
+}
+div[class*="cardStyle"]:nth-child(4),
+div[style*="border-radius: clamp(8px, 2vw, 12px)"]:nth-child(4) {
+  animation-delay: 0.22s;
+}
+
+/* Toast slide-in */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}

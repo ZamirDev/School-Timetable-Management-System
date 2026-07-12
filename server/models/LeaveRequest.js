@@ -11,7 +11,12 @@ const leaveRequestSchema = new mongoose.Schema({
     ref: "User",
     required: true
   },
-  day: {
+  startDay: {
+    type: String,
+    enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    required: true
+  },
+  endDay: {
     type: String,
     enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
     required: true

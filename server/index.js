@@ -66,11 +66,27 @@ function validatePeriodsPerDayValue(periodsPerDay) {
   return "";
 }
 
-function validateTimingInput({ startTime, periodDuration, breakAfter, breakDuration }, periodsPerDay) {
+function validateTimingInput({ startTime, periodDuration, breaks, breakAfter, breakDuration }, periodsPerDay) {
   if (isBlank(startTime) || !/^\d{2}:\d{2}$/.test(startTime)) return "Start time is required";
   if (!isWholeNumber(periodDuration) || periodDuration < 10 || periodDuration > 120) return "Invalid period duration";
-  if (!isWholeNumber(breakAfter) || breakAfter < 1 || breakAfter > periodsPerDay) return "Break must be within total periods";
-  if (!isWholeNumber(breakDuration) || breakDuration < 5 || breakDuration > 60) return "Invalid break duration";
+  
+  if (breaks && Array.isArray(breaks) && breaks.length > 0) {
+    const seen = new Set();
+    for (let i = 0; i < breaks.length; i++) {
+      const b = breaks[i];
+      if (!isWholeNumber(b.after) || b.after < 1 || b.after > periodsPerDay)
+        return `Break ${i+1}: position must be between 1 and ${periodsPerDay}`;
+      if (!isWholeNumber(b.duration) || b.duration < 5 || b.duration > 60)
+        return `Break ${i+1}: duration must be 5-60 minutes`;
+      if (isBlank(b.label)) return `Break ${i+1}: label is required`;
+      if (seen.has(b.after)) return `Break ${i+1}: duplicate position at period ${b.after}`;
+      seen.add(b.after);
+    }
+  } else {
+    // Legacy single-break validation
+    if (!isWholeNumber(breakAfter) || breakAfter < 1 || breakAfter > periodsPerDay) return "Break must be within total periods";
+    if (!isWholeNumber(breakDuration) || breakDuration < 5 || breakDuration > 60) return "Invalid break duration";
+  }
   return "";
 }
 
@@ -119,6 +135,20 @@ function sortWithShuffle(teachers, targetMap, assignedMap, classDayKey, teacherC
 
 
 // ─────────────────────────────────────────────
+//  HELPER: Resolve breaks array from schoolTiming
+//  Handles legacy single-break → multi-break migration
+// ─────────────────────────────────────────────
+function resolveBreaks(schoolTiming) {
+  if (schoolTiming?.breaks && Array.isArray(schoolTiming.breaks) && schoolTiming.breaks.length > 0) {
+    return [...schoolTiming.breaks].sort((a, b) => a.after - b.after);
+  }
+  // Legacy fallback
+  const after = schoolTiming?.breakAfter || 3;
+  const duration = schoolTiming?.breakDuration || 20;
+  return [{ after, duration, label: "Break" }];
+}
+
+// ─────────────────────────────────────────────
 //  HELPER: Generate time slots with breaks
 //  Takes school timing config and period count
 //  Returns array of {period, startTime, endTime}
@@ -127,8 +157,13 @@ function generateTimeSlots(schoolTiming, periodsPerDay) {
   const slots = [];
   const startTime = schoolTiming?.startTime || "08:00";
   const periodDuration = schoolTiming?.periodDuration || 40;
-  const breakAfter = schoolTiming?.breakAfter || 3;
-  const breakDuration = schoolTiming?.breakDuration || 20;
+  const breaks = resolveBreaks(schoolTiming);
+
+  // Build break lookup: after → total duration
+  const breakDurationMap = {};
+  for (const b of breaks) {
+    breakDurationMap[b.after] = (breakDurationMap[b.after] || 0) + b.duration;
+  }
 
   // Parse start time (HH:MM format)
   let [hours, minutes] = startTime.split(":").map(Number);
@@ -150,9 +185,9 @@ function generateTimeSlots(schoolTiming, periodsPerDay) {
       endTime: slotEnd
     });
 
-    // Add break after specified period
-    if (breakAfter && p % breakAfter === 0 && p < periodsPerDay) {
-      currentMinutes += breakDuration;
+    // Add break(s) after this period
+    if (breakDurationMap[p] && p < periodsPerDay) {
+      currentMinutes += breakDurationMap[p];
     }
   }
 
@@ -900,38 +935,30 @@ app.put("/classes/:id/periods-per-day", auth, adminOnly, async (req, res) => {
 });
 
 // PUT /classes/:id/school-timing
-// Body: { "startTime": "08:00", "periodDuration": 40, "breakAfter": 3, "breakDuration": 20 }
 app.put("/classes/:id/school-timing", auth, adminOnly, async (req, res) => {
   try {
-    const { startTime, periodDuration, breakAfter, breakDuration } = req.body;
+    const { startTime, periodDuration, breaks, breakAfter, breakDuration } = req.body;
     const cls = await Class.findOne({ _id: req.params.id, createdBy: req.effectiveCreatedBy });
     if (!cls) return res.status(404).json({ error: "Class not found" });
+    const pDay = cls.periodsPerDay || 6;
 
     const timingError = validateTimingInput(
-      { startTime, periodDuration, breakAfter, breakDuration },
-      cls.periodsPerDay || 6
+      { startTime, periodDuration, breaks, breakAfter, breakDuration },
+      pDay
     );
     if (timingError) return res.status(400).json({ error: timingError });
-    
-    // Validate inputs
-    if (startTime && !/^\d{2}:\d{2}$/.test(startTime)) {
-      return res.status(400).json({ error: "startTime must be HH:MM format" });
-    }
-    if (periodDuration && (periodDuration < 10 || periodDuration > 120)) {
-      return res.status(400).json({ error: "periodDuration must be 10–120 minutes" });
-    }
-    if (breakAfter && (breakAfter < 1 || breakAfter > 12)) {
-      return res.status(400).json({ error: "breakAfter must be 1–12" });
-    }
-    if (breakDuration && (breakDuration < 5 || breakDuration > 60)) {
-      return res.status(400).json({ error: "breakDuration must be 5–60 minutes" });
-    }
 
     const schoolTiming = {};
     if (startTime) schoolTiming.startTime = startTime;
     if (periodDuration) schoolTiming.periodDuration = periodDuration;
-    if (breakAfter !== undefined && breakAfter !== null) schoolTiming.breakAfter = breakAfter;
-    if (breakDuration) schoolTiming.breakDuration = breakDuration;
+    if (breaks && Array.isArray(breaks)) {
+      schoolTiming.breaks = breaks;
+      schoolTiming.breakAfter = undefined;
+      schoolTiming.breakDuration = undefined;
+    } else if (breakAfter !== undefined || breakDuration !== undefined) {
+      schoolTiming.breakAfter = breakAfter;
+      schoolTiming.breakDuration = breakDuration;
+    }
 
     const updated = await Class.findOneAndUpdate(
       { _id: req.params.id, createdBy: req.effectiveCreatedBy },
@@ -953,29 +980,27 @@ app.put("/classes/:id/school-timing", auth, adminOnly, async (req, res) => {
 // PUT /update-all-classes-timing - Update school timing for ALL classes
 app.put("/update-all-classes-timing", auth, adminOnly, async (req, res) => {
   try {
-    const { startTime, periodDuration, breakAfter, breakDuration } = req.body;
+    const { startTime, periodDuration, breaks, breakAfter, breakDuration } = req.body;
+    const pDay = 12;
 
-    // Validate inputs
-    if (startTime && !/^\d{2}:\d{2}$/.test(startTime)) {
-      return res.status(400).json({ error: "startTime must be HH:MM format" });
-    }
-    if (periodDuration && (periodDuration < 10 || periodDuration > 120)) {
-      return res.status(400).json({ error: "periodDuration must be 10–120 minutes" });
-    }
-    if (breakAfter && (breakAfter < 1 || breakAfter > 12)) {
-      return res.status(400).json({ error: "breakAfter must be 1–12" });
-    }
-    if (breakDuration && (breakDuration < 5 || breakDuration > 60)) {
-      return res.status(400).json({ error: "breakDuration must be 5–60 minutes" });
-    }
+    const timingError = validateTimingInput(
+      { startTime, periodDuration, breaks, breakAfter, breakDuration },
+      pDay
+    );
+    if (timingError) return res.status(400).json({ error: timingError });
 
     const schoolTiming = {};
     if (startTime) schoolTiming.startTime = startTime;
     if (periodDuration) schoolTiming.periodDuration = periodDuration;
-    if (breakAfter !== undefined && breakAfter !== null) schoolTiming.breakAfter = breakAfter;
-    if (breakDuration) schoolTiming.breakDuration = breakDuration;
+    if (breaks && Array.isArray(breaks)) {
+      schoolTiming.breaks = breaks;
+      schoolTiming.breakAfter = undefined;
+      schoolTiming.breakDuration = undefined;
+    } else if (breakAfter !== undefined || breakDuration !== undefined) {
+      schoolTiming.breakAfter = breakAfter;
+      schoolTiming.breakDuration = breakDuration;
+    }
 
-    // Update all classes with same timing
     const result = await Class.updateMany({ createdBy: req.effectiveCreatedBy }, { $set: { schoolTiming } });
 
     res.json({ 
@@ -1158,6 +1183,7 @@ app.post("/import", auth, adminOnly, async (req, res) => {
         periodDuration: Number(cl.periodDuration) || 40,
         breakAfter: Number(cl.breakAfter) || 3,
         breakDuration: Number(cl.breakDuration) || 20,
+        breaks: [{ after: Number(cl.breakAfter) || 3, duration: Number(cl.breakDuration) || 20, label: "Break" }]
       };
       if (cl.teacherNames) {
         const names = typeof cl.teacherNames === "string" ? cl.teacherNames.split(",").map(s => s.trim()).filter(Boolean) : cl.teacherNames;
@@ -1337,6 +1363,115 @@ app.put("/classes/:id/add-period", auth, adminOnly, async (req, res) => {
   else dayEntry.periods.push(newPeriod);
   await classData.save();
   res.json({ message: "Period added" });
+});
+
+// PUT /classes/:id/move-period — drag-and-drop move/swap a lecture across days
+app.put("/classes/:id/move-period", auth, adminOnly, async (req, res) => {
+  try {
+    const { fromDay, fromPeriod, toDay, toPeriod } = req.body;
+
+    if (!fromDay || !fromPeriod || !toDay || !toPeriod) {
+      return res.status(400).json({ error: "fromDay, fromPeriod, toDay, toPeriod required" });
+    }
+    if (fromDay === toDay && fromPeriod === toPeriod) {
+      return res.status(400).json({ error: "Cannot move a period to itself" });
+    }
+
+    const cls = await Class.findOne({ _id: req.params.id, createdBy: req.effectiveCreatedBy });
+    if (!cls) return res.status(404).json({ error: "Class not found" });
+
+    const fromDayData = cls.timetable.find(d => d.day === fromDay);
+    const toDayData = cls.timetable.find(d => d.day === toDay);
+    if (!fromDayData || !toDayData) return res.status(404).json({ error: "Day not found in timetable" });
+
+    const source = fromDayData.periods.find(p => p.period === fromPeriod);
+    const target = toDayData.periods.find(p => p.period === toPeriod);
+    if (!source || !target) return res.status(404).json({ error: "Period not found" });
+
+    if (!source.teacher && (!source.tracks || source.tracks.length === 0)) {
+      return res.status(400).json({ error: "Source period is empty, nothing to move" });
+    }
+
+    const getTid = (p) => p.teacher ? String(p.teacher) : null;
+    const tid = getTid(source);
+
+    // Check cross-class conflict for the source teacher at the target slot
+    if (tid) {
+      const others = await Class.find({ _id: { $ne: cls._id } }, { timetable: 1, name: 1 });
+      for (const other of others) {
+        const otherDay = other.timetable.find(d => d.day === toDay);
+        if (!otherDay) continue;
+        const slot = otherDay.periods.find(p => p.period === toPeriod);
+        if (slot && slot.teacher && String(slot.teacher) === tid) {
+          const teacherDoc = await Teacher.findById(tid).select("name");
+          return res.status(400).json({
+            error: `Clash: ${teacherDoc?.name || "Teacher"} already teaches ${other.name} at ${toDay} Period ${toPeriod}`
+          });
+        }
+      }
+    }
+
+    // If target also has a teacher, check reverse conflict too
+    const targetTid = getTid(target);
+    if (targetTid && targetTid !== tid) {
+      const others = await Class.find({ _id: { $ne: cls._id } }, { timetable: 1, name: 1 });
+      for (const other of others) {
+        const otherDay = other.timetable.find(d => d.day === fromDay);
+        if (!otherDay) continue;
+        const slot = otherDay.periods.find(p => p.period === fromPeriod);
+        if (slot && slot.teacher && String(slot.teacher) === targetTid) {
+          const teacherDoc = await Teacher.findById(targetTid).select("name");
+          return res.status(400).json({
+            error: `Clash: ${teacherDoc?.name || "Teacher"} already teaches ${other.name} at ${fromDay} Period ${fromPeriod}`
+          });
+        }
+      }
+    }
+
+    const sourceContent = {
+      teacher: source.teacher,
+      subject: source.subject,
+      tracks: source.tracks ? source.tracks.map(t => ({ ...t })) : []
+    };
+
+    const targetHasContent = target.teacher || (target.tracks && target.tracks.length > 0);
+
+    if (targetHasContent) {
+      // Swap
+      const targetContent = {
+        teacher: target.teacher,
+        subject: target.subject,
+        tracks: target.tracks ? target.tracks.map(t => ({ ...t })) : []
+      };
+      target.teacher = sourceContent.teacher;
+      target.subject = sourceContent.subject;
+      target.tracks = sourceContent.tracks;
+      source.teacher = targetContent.teacher;
+      source.subject = targetContent.subject;
+      source.tracks = targetContent.tracks;
+    } else {
+      // Move
+      target.teacher = sourceContent.teacher;
+      target.subject = sourceContent.subject;
+      target.tracks = sourceContent.tracks;
+      source.teacher = null;
+      source.subject = "Free Period";
+      source.tracks = [];
+    }
+
+    await cls.save();
+
+    const updated = await Class.findById(cls._id)
+      .populate("teachers")
+      .populate("timetable.periods.teacher")
+      .populate("timetable.periods.tracks.teacher");
+
+    res.json({ message: targetHasContent ? "Periods swapped" : "Period moved", class: updated });
+
+  } catch (err) {
+    console.log("MOVE ERROR:", err);
+    res.status(500).json({ error: "Move failed" });
+  }
 });
 
 app.put("/classes/:id/remove-teacher", auth, adminOnly, async (req, res) => {
@@ -1669,35 +1804,38 @@ app.get("/export-pdf/:classId", auth, async (req, res) => {
       }
     }
 
-    // ─────── BREAK TIMING ROW ────────
+    // ─────── BREAK TIMING ROWS ────────
     if (cls.schoolTiming) {
-      const breakAfter = cls.schoolTiming.breakAfter || 3;
-      const breakDuration = cls.schoolTiming.breakDuration || 20;
+      const breaks = resolveBreaks(cls.schoolTiming);
+      const startTime = cls.schoolTiming.startTime || "08:00";
       const periodDuration = cls.schoolTiming.periodDuration || 40;
 
-      let minutes = (cls.schoolTiming.startTime || "08:00").split(":").map(Number);
-      let totalMin = minutes[0] * 60 + minutes[1];
-      totalMin += periodDuration * breakAfter;
+      let [hours, minutes] = startTime.split(":").map(Number);
+      let baseMin = hours * 60 + minutes;
 
-      const bH = Math.floor(totalMin / 60);
-      const bM = totalMin % 60;
-      const breakStart = `${String(bH).padStart(2, "0")}:${String(bM).padStart(2, "0")}`;
+      for (const b of breaks) {
+        let totalMin = baseMin + periodDuration * b.after;
+        const bH = Math.floor(totalMin / 60);
+        const bM = totalMin % 60;
+        const breakStart = `${String(bH).padStart(2, "0")}:${String(bM).padStart(2, "0")}`;
 
-      totalMin += breakDuration;
-      const eH = Math.floor(totalMin / 60);
-      const eM = totalMin % 60;
-      const breakEnd = `${String(eH).padStart(2, "0")}:${String(eM).padStart(2, "0")}`;
+        totalMin += b.duration;
+        const eH = Math.floor(totalMin / 60);
+        const eM = totalMin % 60;
+        const breakEnd = `${String(eH).padStart(2, "0")}:${String(eM).padStart(2, "0")}`;
 
-      cellBg(margin, y, dayColWidth, cellHeight, C.breakBg, C.breakBorder);
-      doc.fillColor(C.breakText).font("Helvetica-Bold").fontSize(9)
-        .text("☕ BREAK", margin + 3, y + 19, { width: dayColWidth - 6, align: "center" });
+        cellBg(margin, y, dayColWidth, cellHeight, C.breakBg, C.breakBorder);
+        doc.fillColor(C.breakText).font("Helvetica-Bold").fontSize(9)
+          .text(`${b.label}`, margin + 3, y + 19, { width: dayColWidth - 6, align: "center" });
 
-      cellBg(margin + dayColWidth, y, pageWidth - dayColWidth, cellHeight, C.breakBg, C.breakBorder);
-      doc.fillColor(C.breakText).font("Helvetica-Bold").fontSize(9)
-        .text(`${breakStart} - ${breakEnd} (${breakDuration} min)`,
-          margin + dayColWidth + 3, y + 19,
-          { width: pageWidth - dayColWidth - 6, align: "center" }
-        );
+        cellBg(margin + dayColWidth, y, pageWidth - dayColWidth, cellHeight, C.breakBg, C.breakBorder);
+        doc.fillColor(C.breakText).font("Helvetica-Bold").fontSize(9)
+          .text(`${breakStart} - ${breakEnd} (${b.duration} min)`,
+            margin + dayColWidth + 3, y + 19,
+            { width: pageWidth - dayColWidth - 6, align: "center" }
+          );
+        y += cellHeight;
+      }
     }
 
     // ─────── FOOTER ────────

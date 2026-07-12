@@ -31,9 +31,9 @@ router.post("/", auth, async (req, res) => {
     if (req.user.role !== "teacher") {
       return res.status(403).json({ error: "Only teachers can submit leave requests" });
     }
-    const { day, reason } = req.body;
-    if (!day) {
-      return res.status(400).json({ error: "Day is required" });
+    const { startDay, endDay, reason } = req.body;
+    if (!startDay || !endDay) {
+      return res.status(400).json({ error: "Start day and end day are required" });
     }
     if (!req.user.teacherRef) {
       return res.status(400).json({ error: "No teacher profile linked to your account" });
@@ -41,7 +41,8 @@ router.post("/", auth, async (req, res) => {
     const request = await LeaveRequest.create({
       teacher: req.user.teacherRef,
       requestedBy: req.user._id,
-      day,
+      startDay,
+      endDay,
       reason: reason || "",
       status: "pending",
       createdBy: req.user.createdBy || req.user._id,
@@ -67,13 +68,21 @@ router.put("/:id", auth, adminOnly, async (req, res) => {
     ).populate("teacher");
     if (!request) return res.status(404).json({ error: "Leave request not found" });
 
-    // If approved, create the absence record automatically
+    // If approved, create absence records for each day in the range
     if (status === "approved" && request.teacher) {
-      await Absence.findOneAndUpdate(
-        { teacher: request.teacher._id, day: request.day, createdBy: req.effectiveCreatedBy },
-        { $set: { teacher: request.teacher._id, day: request.day, createdBy: req.effectiveCreatedBy } },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
-      );
+      const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const startIdx = DAYS_ORDER.indexOf(request.startDay);
+      const endIdx = DAYS_ORDER.indexOf(request.endDay);
+      if (startIdx !== -1 && endIdx !== -1) {
+        for (let i = startIdx; i <= endIdx; i++) {
+          const d = DAYS_ORDER[i];
+          await Absence.findOneAndUpdate(
+            { teacher: request.teacher._id, day: d, createdBy: req.effectiveCreatedBy },
+            { $set: { teacher: request.teacher._id, day: d, createdBy: req.effectiveCreatedBy } },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+          );
+        }
+      }
     }
 
     res.json(request);

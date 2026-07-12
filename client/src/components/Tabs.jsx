@@ -33,7 +33,7 @@ export default function Tabs({ currentTab, setCurrentTab, role }) {
               color: currentTab === "timetable" ? "white" : "var(--text-secondary)"
             }}
           >
-            📅 Timetable
+            Timetable
           </button>
         </div>
       </div>
@@ -69,7 +69,7 @@ export default function Tabs({ currentTab, setCurrentTab, role }) {
               color: currentTab === "my-timetable" ? "white" : "var(--text-secondary)"
             }}
           >
-            🗓️ My Timetable
+            My Timetable
           </button>
         )}
         {isTeacher && (
@@ -82,7 +82,7 @@ export default function Tabs({ currentTab, setCurrentTab, role }) {
               color: currentTab === "my-requests" ? "white" : "var(--text-secondary)"
             }}
           >
-            📋 My Requests
+            My Requests
           </button>
         )}
         <button
@@ -94,7 +94,7 @@ export default function Tabs({ currentTab, setCurrentTab, role }) {
             color: currentTab === "timetable" ? "white" : "var(--text-secondary)"
           }}
         >
-          📅 Timetable
+          Timetable
         </button>
         <button
           onClick={() => setCurrentTab("classes")}
@@ -105,7 +105,7 @@ export default function Tabs({ currentTab, setCurrentTab, role }) {
             color: currentTab === "classes" ? "white" : "var(--text-secondary)"
           }}
         >
-          📚 Classes
+          Classes
         </button>
         <button
           onClick={() => setCurrentTab("teachers")}
@@ -116,7 +116,7 @@ export default function Tabs({ currentTab, setCurrentTab, role }) {
             color: currentTab === "teachers" ? "white" : "var(--text-secondary)"
           }}
         >
-          👨‍🏫 Teachers
+          Teachers
         </button>
         <button
           onClick={() => setCurrentTab("absences")}
@@ -139,7 +139,7 @@ export default function Tabs({ currentTab, setCurrentTab, role }) {
               color: currentTab === "leave-requests" ? "white" : "var(--text-secondary)"
             }}
           >
-            📩 Leave Requests
+            Leave Requests
           </button>
         )}
         {isAdmin && (
@@ -152,7 +152,7 @@ export default function Tabs({ currentTab, setCurrentTab, role }) {
               color: currentTab === "sync-groups" ? "white" : "var(--text-secondary)"
             }}
           >
-            🔗 Sync Groups
+            Sync Groups
           </button>
         )}
         {isAdmin && (

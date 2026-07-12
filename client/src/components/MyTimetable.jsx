@@ -110,7 +110,7 @@ export default function MyTimetable({ user, classes, teachers }) {
   return (
     <div>
       <div style={cardStyle}>
-        <h2 style={headerStyle}>📋 My Weekly Timetable</h2>
+        <h2 style={headerStyle}>My Weekly Timetable</h2>
         <p style={subStyle}>
           <strong style={{ fontSize: "16px" }}>{teacherName}</strong>
           {myTeacher.subject ? <span> — {myTeacher.subject}</span> : null}
@@ -125,7 +125,7 @@ export default function MyTimetable({ user, classes, teachers }) {
             <table className="responsive-table" style={{ borderCollapse: "collapse", fontSize: "14px", width: "100%" }}>
               <thead>
                 <tr style={{ background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)" }}>
-                  <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #cbd5e1", fontWeight: "700", color: "var(--text-table-header)", fontSize: "15px" }}>📅 Day</th>
+                  <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #cbd5e1", fontWeight: "700", color: "var(--text-table-header)", fontSize: "15px" }}>Day</th>
                   {Array.from({ length: maxPeriods }).map((_, i) => (
                     <th key={i} style={{ padding: "12px", textAlign: "center", borderBottom: "2px solid #cbd5e1", minWidth: "140px", fontWeight: "700", fontSize: "15px", color: "#0c4a6e" }}>
                       P{i + 1}

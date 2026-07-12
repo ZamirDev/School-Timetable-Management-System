@@ -21,14 +21,14 @@ export default function TeacherTabs({
     <div>
       {!isAdmin && (
         <p style={{ margin: "0 0 12px 0", fontSize: "15px", color: "var(--text-secondary)", fontStyle: "italic" }}>
-          👁️ View-only mode. Contact an admin to make changes.
+          View-only mode. Contact an admin to make changes.
         </p>
       )}
 
       {/* ADD TEACHER */}
       {isAdmin && (
       <div style={cardStyle}>
-        <h2 style={{ margin: "0 0 20px 0", fontSize: "22px", fontWeight: "700", color: "var(--text-primary)" }}>➕ Add New Teacher</h2>
+        <h2 style={{ margin: "0 0 20px 0", fontSize: "22px", fontWeight: "700", color: "var(--text-primary)" }}>Add New Teacher</h2>
         <form
           onSubmit={submitTeacher}
           className="form-grid-3"
@@ -66,7 +66,7 @@ export default function TeacherTabs({
             onMouseEnter={e => e.target.style.transform = "translateY(-2px)"}
             onMouseLeave={e => e.target.style.transform = "translateY(0)"}
           >
-            {editId ? "✅ Update" : "➕ Add"}
+            {editId ? "Update" : "Add"}
           </button>
           {editId && (
             <button
@@ -85,7 +85,7 @@ export default function TeacherTabs({
                 color: "var(--text-error)"
               }}
             >
-              ✕ Cancel Edit
+              Cancel Edit
             </button>
           )}
         </form>
@@ -100,15 +100,15 @@ export default function TeacherTabs({
       ) : (
         <div style={cardStyle}>
           <h3 style={{ margin: "0 0 16px 0", fontSize: "20px", fontWeight: "700", color: "var(--text-primary)" }}>
-            👨‍🏫 Teachers Directory ({teachers.length})
+            Teachers Directory ({teachers.length})
           </h3>
           <div style={{ borderRadius: "8px", border: "1px solid #cbd5e1", overflow: "hidden" }}>
             <table style={{ width: "100%", fontSize: "15px", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)", borderBottom: "2px solid #cbd5e1" }}>
-                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#0c4a6e" }}>👤 Name</th>
-                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#0c4a6e" }}>📖 Subject</th>
-                  {isAdmin && <th style={{ padding: "14px 16px", textAlign: "right", fontWeight: "700", color: "#0c4a6e" }}>⚙️ Actions</th>}
+                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#0c4a6e" }}>Name</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#0c4a6e" }}>Subject</th>
+                  {isAdmin && <th style={{ padding: "14px 16px", textAlign: "right", fontWeight: "700", color: "#0c4a6e" }}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -162,7 +162,7 @@ export default function TeacherTabs({
                         onMouseEnter={e => e.target.style.background = "#dcfce7"}
                         onMouseLeave={e => e.target.style.background = "#f0fdf4"}
                       >
-                        ✏️ Edit
+                        Edit
                       </button>
                       <button
                         onClick={() => deleteTeacher(t._id)}
@@ -180,7 +180,7 @@ export default function TeacherTabs({
                         onMouseEnter={e => e.target.style.background = "#fee2e2"}
                         onMouseLeave={e => e.target.style.background = "#fef2f2"}
                       >
-                        🗑️ Delete
+                        Delete
                       </button>
                     </td>
                     )}

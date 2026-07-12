@@ -21,7 +21,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
               color: "#f0f9ff",
               letterSpacing: "-0.5px"
             }}>
-              🏫 {user?.role === "teacher" ? "Teacher Panel" : user?.role === "student" ? "Student Panel" : "Admin Panel"}
+              {user?.role === "teacher" ? "Teacher Panel" : user?.role === "student" ? "Student Panel" : "Admin Panel"}
             </h1>
             <p style={{
               margin: "8px 0 0 0",
@@ -84,7 +84,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
                 marginTop: "4px"
               }}
             >
-              {darkMode ? "☀️" : "🌙"}
+              {darkMode ? "Light" : "Dark"}
             </button>
             <button
               onClick={() => setShowHelp(!showHelp)}
@@ -104,7 +104,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
               onMouseEnter={e => e.target.style.transform = "translateY(-2px)"}
               onMouseLeave={e => e.target.style.transform = "translateY(0)"}
             >
-              ❓ {showHelp ? "Close Help" : "Help & Guide"}
+              {showHelp ? "Close Help" : "Help & Guide"}
             </button>
           </div>
         </div>
@@ -135,7 +135,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
               <h2 style={{ margin: 0, fontSize: "24px", fontWeight: "700", color: "#0f172a" }}>
-                📖 Help & Guide
+                Help & Guide
               </h2>
               <button
                 onClick={() => setShowHelp(false)}
@@ -150,7 +150,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
                   color: "#64748b"
                 }}
               >
-                ✕
+                X
               </button>
             </div>
 
@@ -159,13 +159,13 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
               {/* ROLE OVERVIEW */}
               <section style={{ marginBottom: "24px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  👤 Role Overview
+                  Role Overview
                 </h3>
                 <p style={{ margin: "0" }}>
                   <strong>Admin</strong> — Full access: manage teachers, classes, generate timetables, approve leave requests, and manage accounts.
                 </p>
                 <p style={{ margin: "8px 0 0 0" }}>
-                  <strong>Teacher</strong> — View-only access to timetables, classes, and teacher directory. Teachers can view their own personal schedule in <strong>🗓️ My Timetable</strong> and submit leave requests in <strong>📋 My Requests</strong>.
+                  <strong>Teacher</strong> — View-only access to timetables, classes, and teacher directory. Teachers can view their own personal schedule in <strong>My Timetable</strong> and submit leave requests in <strong>My Requests</strong>.
                 </p>
               </section>
 
@@ -174,7 +174,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
               {/* ADMIN SECTIONS */}
               <section style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  👨‍🏫 Teachers Tab
+                  Teachers Tab
                 </h3>
                 <p style={{ margin: "0 0 8px 0" }}>
                   Add all teachers to the system before creating classes:
@@ -188,7 +188,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
 
               <section style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  📚 Classes Tab
+                  Classes Tab
                 </h3>
                 <p style={{ margin: "0 0 8px 0" }}>
                   Create classes and configure them:
@@ -196,7 +196,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
                 <ul style={{ margin: "8px 0 0 20px", paddingLeft: 0 }}>
                   <li><strong>Add New Class:</strong> Enter class name (e.g., 10A)</li>
                   <li><strong>School Timing:</strong> Set start time, period duration, and break (applies to all classes)</li>
-                  <li><strong>Configure (⚙️):</strong> Assign teachers to a class and set periods per day</li>
+                  <li><strong>Configure:</strong> Assign teachers to a class and set periods per day</li>
                   <li><strong>Teacher Quota:</strong> Control how many periods each teacher teaches (optional — skip for auto-distribution)</li>
                   <li><strong>Teacher Groups:</strong> Group teachers who share the same slot (e.g., elective subjects like Math/Bio). All group members are automatically placed together when you generate.</li>
                 </ul>
@@ -204,23 +204,23 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
 
               <section style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  📅 Timetable Tab
+                  Timetable Tab
                 </h3>
                 <p style={{ margin: "0 0 8px 0" }}>
                   Generate and manage timetables:
                 </p>
                 <ul style={{ margin: "8px 0 0 20px", paddingLeft: 0 }}>
-                  <li><strong>Generate All Timetables (🔴):</strong> Auto-creates schedules for all classes at once</li>
-                  <li><strong>Check Conflicts (🔵):</strong> Detects teachers assigned to multiple classes at the same time</li>
-                  <li><strong>Edit Cells (✏️):</strong> Toggle edit mode and click any cell to change teacher/subject or add elective groups</li>
+                  <li><strong>Generate All Timetables:</strong> Auto-creates schedules for all classes at once</li>
+                  <li><strong>Check Conflicts:</strong> Detects teachers assigned to multiple classes at the same time</li>
+                  <li><strong>Edit Cells:</strong> Toggle edit mode and click any cell to change teacher/subject or add elective groups</li>
                   <li><strong>Download PDF:</strong> Export any class timetable as a printable PDF</li>
-                  <li><strong>Export All Data (📥):</strong> Download an Excel file with all teachers, classes, timetables, and accounts</li>
+                  <li><strong>Export All Data:</strong> Download an Excel file with all teachers, classes, timetables, and accounts</li>
                 </ul>
               </section>
 
               <section style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  🚪 Teacher Leave Tab (Absences)
+                  Teacher Leave Tab (Absences)
                 </h3>
                 <p style={{ margin: "0 0 8px 0" }}>
                   Manage teacher absences manually:
@@ -234,7 +234,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
 
               <section style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  📩 Leave Requests Tab (Admin)
+                  Leave Requests Tab (Admin)
                 </h3>
                 <p style={{ margin: "0 0 8px 0" }}>
                   Review and handle leave requests submitted by teachers:
@@ -248,7 +248,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
 
               <section style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  🔐 Accounts Tab (Admin)
+                  Accounts Tab (Admin)
                 </h3>
                 <p style={{ margin: "0 0 8px 0" }}>
                   Create and manage user accounts:
@@ -266,7 +266,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
               {/* TEACHER SECTIONS */}
               <section style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  🗓️ My Timetable (Teachers)
+                  My Timetable (Teachers)
                 </h3>
                 <p style={{ margin: "0 0 8px 0" }}>
                   View your personal weekly schedule across all classes:
@@ -280,7 +280,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
 
               <section style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  📋 My Requests (Teachers)
+                  My Requests (Teachers)
                 </h3>
                 <p style={{ margin: "0 0 8px 0" }}>
                   Submit and track leave requests:
@@ -297,27 +297,41 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
               {/* TIPS */}
               <section style={{ marginBottom: "16px" }}>
                 <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", marginBottom: "10px" }}>
-                  ⚡ Quick Tips
+                  Quick Tips
                 </h3>
                 <ul style={{ margin: "0 0 0 20px", paddingLeft: 0 }}>
-                  <li>📊 Always <strong>Check Conflicts</strong> after generating before finalizing</li>
-                  <li>🔄 Teachers won't teach the same class back-to-back</li>
-                  <li>⏰ Each teacher teaches max 4 periods per day</li>
-                  <li>❌ Skip quota to auto-distribute teachers evenly</li>
-                  <li>👥 Use <strong>Teacher Groups</strong> for elective subjects — grouped teachers always share the same period slot</li>
-                  <li>🌙 Toggle dark mode with the ☀️/🌙 button in the header</li>
+                  <li>Always <strong>Check Conflicts</strong> after generating before finalizing</li>
+                  <li>Teachers won't teach the same class back-to-back</li>
+                  <li>Each teacher teaches max 4 periods per day</li>
+                  <li>Skip quota to auto-distribute teachers evenly</li>
+                  <li>Use <strong>Teacher Groups</strong> for elective subjects — grouped teachers always share the same period slot</li>
+                  <li>Toggle dark mode with the dark/light button in the header</li>
                 </ul>
               </section>
 
               <section style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "14px", marginTop: "20px" }}>
                 <p style={{ margin: 0, color: "#0f766e", fontSize: "14px", fontWeight: "600" }}>
-                  💡 <strong>Recommended Workflow:</strong> Create teachers → Add classes → Assign teachers to classes → Generate timetable → Check conflicts → Done!
+                  <strong>Recommended Workflow:</strong> Create teachers → Add classes → Assign teachers to classes → Generate timetable → Check conflicts → Done!
                 </p>
               </section>
             </div>
           </div>
         </div>
       )}
+
+      <footer style={{
+        textAlign: "center",
+        padding: "16px 20px",
+        fontSize: "15px",
+        color: "#64748b",
+        borderTop: "1px solid #e2e8f0",
+        marginTop: "0",
+        marginBottom: "16px",
+        fontWeight: 600,
+        letterSpacing: "0.3px"
+      }}>
+        Made by Zamir Memon
+      </footer>
     </>
   );
 }

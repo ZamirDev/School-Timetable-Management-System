@@ -41,14 +41,14 @@ export default function ClassesTab({
     <div>
       {!isAdmin && (
         <p style={{ margin: "0 0 12px 0", fontSize: "15px", color: "var(--text-secondary)", fontStyle: "italic" }}>
-          👁️ View-only mode. Contact an admin to make changes.
+          View-only mode. Contact an admin to make changes.
         </p>
       )}
 
       {/* ADD CLASS */}
       {isAdmin && (
       <div style={{ ...cardStyle, marginBottom: "16px", padding: "16px" }}>
-        <h2 style={{ margin: "0 0 12px 0", fontSize: "20px", fontWeight: "700", color: "var(--text-primary)" }}>➕ Add New Class</h2>
+        <h2 style={{ margin: "0 0 12px 0", fontSize: "20px", fontWeight: "700", color: "var(--text-primary)" }}>Add New Class</h2>
         <div className="flex-row" style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
             <input
@@ -74,7 +74,7 @@ export default function ClassesTab({
 
       {/* UNIFIED SCHOOL TIMING & BREAKS */}
       <div style={{ ...cardStyle, marginBottom: "16px", padding: "16px" }}>
-        <h2 style={{ margin: "0 0 12px 0", fontSize: "20px", fontWeight: "700", color: "var(--text-primary)" }}>⏰ School Timing & Breaks (All Classes)</h2>
+        <h2 style={{ margin: "0 0 12px 0", fontSize: "20px", fontWeight: "700", color: "var(--text-primary)" }}>School Timing & Breaks (All Classes)</h2>
         
         <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <div>
@@ -105,36 +105,95 @@ export default function ClassesTab({
             />
             <FieldError message={(configErrors.schoolTiming || {}).periodDuration} />
           </div>
-          <div>
-            <label style={{ fontSize: "13px", color: "#475569", display: "block", marginBottom: "4px", fontWeight: "600" }}>
-              Break After Period
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="12"
-              value={schoolTiming?.breakAfter ?? 3}
-              onChange={e => updateSchoolTiming("breakAfter", e.target.value)}
-              onBlur={() => validateSchoolTimingField?.("breakAfter")}
-              style={withValidation({ ...inputStyle, fontSize: "14px", padding: "6px" }, (configErrors.schoolTiming || {}).breakAfter)}
-            />
-            <FieldError message={(configErrors.schoolTiming || {}).breakAfter} />
+        </div>
+
+        <div style={{ marginBottom: "12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <label style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)" }}>Breaks</label>
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  const breaks = [...(schoolTiming?.breaks || [])];
+                  breaks.push({ after: 1, duration: 20, label: "Break" });
+                  updateSchoolTiming("breaks", breaks);
+                }}
+                style={{ ...buttonSecondary, padding: "4px 12px", fontSize: "13px" }}
+              >
+                + Add Break
+              </button>
+            )}
           </div>
-          <div>
-            <label style={{ fontSize: "13px", color: "#475569", display: "block", marginBottom: "4px", fontWeight: "600" }}>
-              Break Duration (min)
-            </label>
-            <input
-              type="number"
-              min="5"
-              max="60"
-              value={schoolTiming?.breakDuration ?? 20}
-              onChange={e => updateSchoolTiming("breakDuration", e.target.value)}
-              onBlur={() => validateSchoolTimingField?.("breakDuration")}
-              style={withValidation({ ...inputStyle, fontSize: "14px", padding: "6px" }, (configErrors.schoolTiming || {}).breakDuration)}
-            />
-            <FieldError message={(configErrors.schoolTiming || {}).breakDuration} />
-          </div>
+          {(schoolTiming?.breaks || []).length === 0 ? (
+            <p style={{ fontSize: "14px", color: "#94a3b8", fontStyle: "italic" }}>No breaks configured</p>
+          ) : (
+            (schoolTiming?.breaks || []).map((b, idx) => {
+              const errAfter = (configErrors.schoolTiming || {})[`breaks[${idx}].after`];
+              const errDuration = (configErrors.schoolTiming || {})[`breaks[${idx}].duration`];
+              const errLabel = (configErrors.schoolTiming || {})[`breaks[${idx}].label`];
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex", gap: "8px", alignItems: "flex-start",
+                    padding: "8px 10px", marginBottom: "8px",
+                    background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
+                    borderRadius: "8px", border: "1px solid #fde68a"
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: "12px", color: "#92400e", display: "block", marginBottom: "2px", fontWeight: "600" }}>After Period</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={b.after}
+                      onChange={e => updateSchoolTiming(`breaks.${idx}.after`, e.target.value)}
+                      style={withValidation({ ...inputStyle, fontSize: "13px", padding: "4px 6px", width: "100%", boxSizing: "border-box" }, errAfter)}
+                    />
+                    <FieldError message={errAfter} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: "12px", color: "#92400e", display: "block", marginBottom: "2px", fontWeight: "600" }}>Duration (min)</label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="60"
+                      value={b.duration}
+                      onChange={e => updateSchoolTiming(`breaks.${idx}.duration`, e.target.value)}
+                      style={withValidation({ ...inputStyle, fontSize: "13px", padding: "4px 6px", width: "100%", boxSizing: "border-box" }, errDuration)}
+                    />
+                    <FieldError message={errDuration} />
+                  </div>
+                  <div style={{ flex: 2, minWidth: 0 }}>
+                    <label style={{ fontSize: "12px", color: "#92400e", display: "block", marginBottom: "2px", fontWeight: "600" }}>Label</label>
+                    <input
+                      type="text"
+                      value={b.label}
+                      onChange={e => updateSchoolTiming(`breaks.${idx}.label`, e.target.value)}
+                      placeholder="e.g. Break, Lunch"
+                      style={withValidation({ ...inputStyle, fontSize: "13px", padding: "4px 6px", width: "100%", boxSizing: "border-box" }, errLabel)}
+                    />
+                    <FieldError message={errLabel} />
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        const breaks = (schoolTiming?.breaks || []).filter((_, i) => i !== idx);
+                        updateSchoolTiming("breaks", breaks);
+                      }}
+                      style={{
+                        background: "none", border: "none", cursor: "pointer",
+                        fontSize: "20px", color: "#dc2626", padding: "18px 4px 0 4px", lineHeight: "1"
+                      }}
+                      title="Remove break"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
 
         {isAdmin && (
@@ -142,7 +201,7 @@ export default function ClassesTab({
           onClick={saveSchoolTiming}
           style={{ ...buttonPrimary, background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", padding: "8px 16px", fontSize: "14px" }}
         >
-          💾 Save Timing for All Classes
+          Save Timing for All Classes
         </button>
         )}
       </div>
@@ -159,7 +218,7 @@ export default function ClassesTab({
               <div>
                 <strong style={{ margin: "0 0 2px 0", fontSize: "18px", fontWeight: "700", color: "var(--text-primary)" }}>{c.name}</strong>
                 <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "var(--text-secondary)" }}>
-                  👨‍🏫 <strong style={{ color: "var(--text-primary)" }}>{c.teachers.length}</strong> teacher{c.teachers.length !== 1 ? "s" : ""} assigned
+                  <strong style={{ color: "var(--text-primary)" }}>{c.teachers.length}</strong> teacher{c.teachers.length !== 1 ? "s" : ""} assigned
                 </p>
               </div>
               {isAdmin && (
@@ -175,7 +234,7 @@ export default function ClassesTab({
                     border: configuring === c._id ? "none" : "1px solid #cbd5e1"
                   }}
                 >
-                  {configuring === c._id ? "✕ Close" : "⚙️ Configure"}
+                  {configuring === c._id ? "Close" : "Configure"}
                 </button>
                 <button
                   onClick={() => deleteClass(c._id)}

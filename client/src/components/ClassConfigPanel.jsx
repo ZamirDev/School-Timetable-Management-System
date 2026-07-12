@@ -78,7 +78,7 @@ export default function ClassConfigPanel({
       {/* A. PERIODS PER DAY */}
       <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
         <label style={{ display: "block", marginBottom: "8px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
-          📚 Periods Per Day
+          Periods Per Day
         </label>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <input
@@ -103,7 +103,7 @@ export default function ClassConfigPanel({
       {/* B. ASSIGN TEACHERS */}
       <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
         <label style={{ display: "block", marginBottom: "8px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
-          👨‍🏫 Assign Teachers
+          Assign Teachers
         </label>
         <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
           <select
@@ -172,7 +172,7 @@ export default function ClassConfigPanel({
       {/* C. TEACHER GROUPS */}
       <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
         <label style={{ display: "block", marginBottom: "8px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
-          🎯 Teacher Groups
+          Teacher Groups
         </label>
         <p style={{ margin: "0 0 12px 0", fontSize: "13px", color: "var(--text-secondary)" }}>
           Group teachers who share the same period slot (e.g. elective subjects). Grouped teachers will always appear together in the timetable.
@@ -289,7 +289,7 @@ export default function ClassConfigPanel({
           disabled={savingGroups}
           style={{ ...buttonPrimary, marginTop: "12px", padding: "8px 16px", fontSize: "14px" }}
         >
-          {savingGroups ? "Saving..." : "💾 Save Groups"}
+          {savingGroups ? "Saving..." : "Save Groups"}
         </button>
       </div>
 
@@ -297,7 +297,7 @@ export default function ClassConfigPanel({
       {classItem.teachers.length > 0 && (
         <div>
           <label style={{ display: "block", marginBottom: "10px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
-            📊 Teacher Quota
+            Teacher Quota
           </label>
           <div style={{ background: "white", borderRadius: "8px", border: "1px solid #cbd5e1", overflow: "hidden" }}>
             <table style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse" }}>
@@ -328,7 +328,7 @@ export default function ClassConfigPanel({
                       <td style={{ padding: "8px 12px", textAlign: "right" }}>
                         {saved !== undefined && (
                           <span style={{ fontSize: "12px", color: "#10b981", fontWeight: "700", background: "#ecfdf5", padding: "2px 6px", borderRadius: "4px" }}>
-                            ✓ {saved}
+                            {saved}
                           </span>
                         )}
                       </td>

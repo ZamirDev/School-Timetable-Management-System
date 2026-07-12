@@ -44,7 +44,12 @@ const classSchema = new mongoose.Schema({
     startTime: { type: String, default: "08:00" },
     periodDuration: { type: Number, default: 40 },
     breakAfter: { type: Number, default: 3 },
-    breakDuration: { type: Number, default: 20 }
+    breakDuration: { type: Number, default: 20 },
+    breaks: [{
+      after: { type: Number, required: true },
+      duration: { type: Number, required: true },
+      label: { type: String, default: "Break" }
+    }]
   },
   teacherGroups: [{
     groupName: String,

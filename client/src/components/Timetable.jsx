@@ -1,7 +1,50 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { cardStyle, buttonPrimary, buttonSecondary } from "../utils/styles";
 import { apiFetch } from "../utils/api";
 import * as XLSX from "xlsx";
+import toast from "react-hot-toast";
+
+function DnDCell({ cellId, isEditMode, hasContent, children, onClick, baseStyle }) {
+  const { setNodeRef: dropRef, isOver } = useDroppable({
+    id: cellId,
+    disabled: !isEditMode,
+  });
+
+  const { attributes, listeners, setNodeRef: dragRef, isDragging } = useDraggable({
+    id: `drag-${cellId}`,
+    disabled: !isEditMode || !hasContent,
+  });
+
+  const mergedRef = useCallback((node) => {
+    dropRef(node);
+    if (hasContent && isEditMode) {
+      dragRef(node);
+    }
+  }, [dropRef, dragRef, hasContent, isEditMode]);
+
+  const showDrag = hasContent && isEditMode;
+
+  const style = {
+    ...baseStyle,
+    background: isOver && isEditMode ? "#dbeafe" : baseStyle.background,
+    outline: isOver && isEditMode ? "2px solid #3b82f6" : baseStyle.outline,
+    outlineOffset: isOver && isEditMode ? "-1px" : baseStyle.outlineOffset,
+    opacity: isDragging && showDrag ? 0.3 : undefined,
+    cursor: showDrag ? "grab" : isEditMode ? "pointer" : "default",
+  };
+
+  return (
+    <td
+      ref={mergedRef}
+      onClick={onClick}
+      style={style}
+      {...(showDrag ? { ...listeners, ...attributes } : {})}
+    >
+      {children}
+    </td>
+  );
+}
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
@@ -11,7 +54,49 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
   const [editTeacher, setEditTeacher] = useState("");
   const [editSubject, setEditSubject] = useState("");
   const [editTracks, setEditTracks] = useState([]);
-  const [editMsg, setEditMsg] = useState(null);
+  const dragSource = useRef(null);
+
+  const handleDragStart = (event) => {
+    const { active } = event;
+    const cellId = active.id.replace("drag-", "");
+    const [classId, ...rest] = cellId.split("|");
+    dragSource.current = {
+      classId,
+      day: rest.slice(0, -1).join("|"),
+      period: parseInt(rest[rest.length - 1]),
+    };
+  };
+
+  const handleDragEnd = async (event) => {
+    const { over } = event;
+    if (!over || !dragSource.current) return;
+
+    const targetId = over.id;
+    const [, ...tgtRest] = targetId.split("|");
+    const targetDay = tgtRest.slice(0, -1).join("|");
+    const targetPeriod = parseInt(tgtRest[tgtRest.length - 1]);
+
+    const { classId, day: sourceDay, period: sourcePeriod } = dragSource.current;
+    dragSource.current = null;
+
+    if (sourceDay === targetDay && sourcePeriod === targetPeriod) return;
+
+    try {
+      const res = await apiFetch(`/classes/${classId}/move-period`, {
+        method: "PUT",
+        body: JSON.stringify({ fromDay: sourceDay, fromPeriod: sourcePeriod, toDay: targetDay, toPeriod: targetPeriod }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message);
+        fetchClasses();
+      } else {
+        toast.error(data.error || "Move failed");
+      }
+    } catch {
+      toast.error("Move failed: network error");
+    }
+  };
 
   // Import state
   const [showImport, setShowImport] = useState(false);
@@ -69,7 +154,6 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
   const saveEditPeriod = async () => {
     if (!editPopup) return;
     const { classId, day, period } = editPopup;
-    setEditMsg(null);
     try {
       const body = { day, period };
       body.teacherId = editTeacher || null;
@@ -82,15 +166,14 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
       const data = await res.json();
       if (res.ok) {
         setEditPopup(null);
-        setEditMsg({ type: "success", text: `Updated Period ${period} (${day})` });
+        toast.success(`Updated Period ${period} (${day})`);
         fetchClasses();
       } else {
-        setEditMsg({ type: "error", text: data.error || "Failed to update period" });
+        toast.error(data.error || "Failed to update period");
       }
     } catch {
-      setEditMsg({ type: "error", text: "Failed to update period" });
+      toast.error("Failed to update period");
     }
-    setTimeout(() => setEditMsg(null), 3000);
   };
 
   const handleExport = async () => {
@@ -353,7 +436,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
   if (isStudent && loadingStudent) {
     return (
       <div style={cardStyle}>
-        <p style={{ color: "var(--text-secondary)", fontSize: "16px", textAlign: "center" }}>⏳ Loading your timetable...</p>
+        <p style={{ color: "var(--text-secondary)", fontSize: "16px", textAlign: "center" }}>Loading your timetable...</p>
       </div>
     );
   }
@@ -372,17 +455,17 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
     <div>
       <div style={cardStyle}>
         <h2 style={{ margin: "0 0 20px 0", fontSize: "22px", fontWeight: "700", color: "var(--text-primary)" }}>
-          {isStudent ? "📋 My Class Timetable" : "Generate Timetables for All Classes"}
+          {isStudent ? "My Class Timetable" : "Generate Timetables for All Classes"}
         </h2>
 
         {isStudent && (
           <p style={{ margin: "0 0 12px 0", fontSize: "15px", color: "var(--text-secondary)", fontStyle: "italic" }}>
-            🎒 Student View — Your class timetable
+            Student View — Your class timetable
           </p>
         )}
         {!isAdmin && !isStudent && (
           <p style={{ margin: "0 0 12px 0", fontSize: "15px", color: "var(--text-secondary)", fontStyle: "italic" }}>
-            👁️ View-only mode. Contact an admin to make changes.
+            View-only mode. Contact an admin to make changes.
           </p>
         )}
         {!isStudent && (
@@ -398,7 +481,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                   boxShadow: generating ? "none" : "0 4px 12px rgba(239, 68, 68, 0.3)"
                 }}
               >
-                {generating ? "⏳ Generating..." : "⚡ Generate All Timetables"}
+                {generating ? "Generating..." : "Generate All Timetables"}
               </button>
             )}
 
@@ -412,7 +495,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                 boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)"
               }}
             >
-              🔍 Check Conflicts
+              Check Conflicts
             </button>
 
             {isAdmin && (
@@ -426,7 +509,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                   boxShadow: "0 4px 12px rgba(5, 150, 105, 0.3)"
                 }}
               >
-                📥 Export All Data
+                Export All Data
               </button>
             )}
             {isAdmin && (
@@ -439,7 +522,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                   boxShadow: showImport ? "none" : "0 4px 12px rgba(139, 92, 246, 0.3)"
                 }}
               >
-                📥 {showImport ? "Close Import" : "Import Data"}
+                {showImport ? "Close Import" : "Import Data"}
               </button>
             )}
           </div>
@@ -467,21 +550,6 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
           </div>
         )}
 
-        {editMsg && (
-          <div style={{
-            marginTop: "12px",
-            padding: "10px 14px",
-            borderRadius: "8px",
-            fontSize: "15px",
-            fontWeight: "600",
-            background: editMsg.type === "success" ? "#f0fdf4" : "#fef2f2",
-            border: editMsg.type === "success" ? "1px solid #bbf7d0" : "1px solid #fecaca",
-            color: editMsg.type === "success" ? "#0f766e" : "#dc2626",
-          }}>
-            {editMsg.type === "success" ? "✅ " : "⚠️ "}{editMsg.text}
-          </div>
-        )}
-
         {isAdmin && !isStudent && (
           <div style={{ marginTop: "12px", display: "flex", gap: "12px", alignItems: "center" }}>
             <button
@@ -497,7 +565,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                 cursor: "pointer",
               }}
             >
-              ✏️ {editMode ? "Done Editing" : "Edit Cells"}
+              {editMode ? "Done Editing" : "Edit Cells"}
             </button>
             {editMode && (
               <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
@@ -511,13 +579,13 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
       {/* CONFLICT DETECTION RESULTS */}
       {!isStudent && conflictsChecked && conflicts.length === 0 && (
         <div style={{ ...cardStyle, background: "linear-gradient(135deg, #f0fdf4 0%, #e0fce8 100%)", border: "1px solid #bbf7d0" }}>
-          <p style={{ color: "var(--text-success)", fontSize: "16px", margin: 0 }}>✅ No conflicts found. Timetable is valid.</p>
+          <p style={{ color: "var(--text-success)", fontSize: "16px", margin: 0 }}>No conflicts found. Timetable is valid.</p>
         </div>
       )}
 
       {!isStudent && conflicts.length > 0 && (
         <div style={{ ...cardStyle, background: "linear-gradient(135deg, #fef2f2 0%, #fde68a 100%)", border: "2px solid #fca5a5" }}>
-          <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", fontWeight: "700", color: "var(--text-break)" }}>⚠️ Conflicts Detected:</h3>
+          <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", fontWeight: "700", color: "var(--text-break)" }}>Conflicts Detected:</h3>
           <div style={{ display: "grid", gap: "12px" }}>
             {conflicts.map((c, idx) => (
               <div key={idx} style={{ padding: "12px", background: "white", borderRadius: "6px", border: "1px solid #fecaca" }}>
@@ -529,7 +597,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                 </p>
                 <div style={{ marginLeft: "12px" }}>
                   {c.classes.map((cls, i) => (
-                    <p key={i} style={{ margin: "4px 0", fontSize: "14px", color: "var(--text-tertiary)" }}>• {cls}</p>
+                    <p key={i} style={{ margin: "4px 0", fontSize: "14px", color: "var(--text-tertiary)" }}>- {cls}</p>
                   ))}
                 </div>
               </div>
@@ -542,7 +610,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
       {showImport && (
         <div style={{ ...cardStyle, marginTop: "16px" }}>
           <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>
-            📥 Import Data from Spreadsheet
+            Import Data from Spreadsheet
           </h3>
           <p style={{ margin: "0 0 16px 0", fontSize: "14px", color: "var(--text-secondary)" }}>
             Upload an <strong>.xlsx</strong> file exported from this system to restore all data.
@@ -564,7 +632,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                 transition: "all 0.2s",
               }}
             >
-              <p style={{ margin: "0 0 8px 0", fontSize: "28px" }}>📄</p>
+              <p style={{ margin: "0 0 8px 0", fontSize: "28px" }}>[file]</p>
               <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>
                 Click or drag your exported .xlsx here
               </p>
@@ -581,13 +649,13 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
             </div>
           ) : importing ? (
             <div style={{ textAlign: "center", padding: "20px" }}>
-              <p style={{ fontSize: "16px", color: "var(--text-secondary)", fontWeight: 600 }}>⏳ Importing data...</p>
+              <p style={{ fontSize: "16px", color: "var(--text-secondary)", fontWeight: 600 }}>Importing data...</p>
             </div>
           ) : importResult ? (
             <div>
               {importResult.error ? (
                 <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "14px", marginBottom: "12px" }}>
-                  <p style={{ margin: 0, color: "#dc2626", fontWeight: 600, fontSize: "15px" }}>❌ Import failed: {importResult.error}</p>
+                  <p style={{ margin: 0, color: "#dc2626", fontWeight: 600, fontSize: "15px" }}>Import failed: {importResult.error}</p>
                   <button
                     onClick={() => { setImportFile(null); setImportResult(null); }}
                     style={{ marginTop: "12px", padding: "8px 16px", borderRadius: "8px", border: "none", background: "#0f172a", color: "white", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
@@ -598,16 +666,16 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
               ) : (
                 <div>
                   <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "16px", marginBottom: "12px" }}>
-                    <p style={{ margin: "0 0 8px 0", color: "#0f766e", fontWeight: 700, fontSize: "16px" }}>✅ Import successful!</p>
+                    <p style={{ margin: "0 0 8px 0", color: "#0f766e", fontWeight: 700, fontSize: "16px" }}>Import successful!</p>
                     {importResult.result && (
                       <div style={{ fontSize: "14px", color: "#0f766e" }}>
-                        <p style={{ margin: "2px 0" }}>• {importResult.result.teachers} teachers</p>
-                        <p style={{ margin: "2px 0" }}>• {importResult.result.accounts} accounts</p>
-                        <p style={{ margin: "2px 0" }}>• {importResult.result.classes} classes</p>
-                        <p style={{ margin: "2px 0" }}>• {importResult.result.periods} periods</p>
-                        <p style={{ margin: "2px 0" }}>• {importResult.result.teacherGroups} teacher groups</p>
-                        <p style={{ margin: "2px 0" }}>• {importResult.result.groupSyncs} group syncs</p>
-                        <p style={{ margin: "2px 0" }}>• {importResult.result.absences} absences</p>
+                        <p style={{ margin: "2px 0" }}>- {importResult.result.teachers} teachers</p>
+                        <p style={{ margin: "2px 0" }}>- {importResult.result.accounts} accounts</p>
+                        <p style={{ margin: "2px 0" }}>- {importResult.result.classes} classes</p>
+                        <p style={{ margin: "2px 0" }}>- {importResult.result.periods} periods</p>
+                        <p style={{ margin: "2px 0" }}>- {importResult.result.teacherGroups} teacher groups</p>
+                        <p style={{ margin: "2px 0" }}>- {importResult.result.groupSyncs} group syncs</p>
+                        <p style={{ margin: "2px 0" }}>- {importResult.result.absences} absences</p>
                       </div>
                     )}
                   </div>
@@ -629,22 +697,29 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
         <>
           {displayClasses.map(c => {
               const periodsDay = c.periodsPerDay || 6;
-              const breakAfter = c.schoolTiming?.breakAfter || 3;
               const periodDuration = c.schoolTiming?.periodDuration || 40;
-              const breakDuration = c.schoolTiming?.breakDuration || 20;
 
-              let minutes = (c.schoolTiming?.startTime || "08:00").split(":").map(Number);
-              let totalMin = minutes[0] * 60 + minutes[1];
-              totalMin += periodDuration * breakAfter;
-              
-              const breakStartHours = Math.floor(totalMin / 60);
-              const breakStartMins = totalMin % 60;
-              const breakStart = `${String(breakStartHours).padStart(2, "0")}:${String(breakStartMins).padStart(2, "0")}`;
-
-              totalMin += breakDuration;
-              const breakEndHours = Math.floor(totalMin / 60);
-              const breakEndMins = totalMin % 60;
-              const breakEnd = `${String(breakEndHours).padStart(2, "0")}:${String(breakEndMins).padStart(2, "0")}`;
+              // Resolve breaks (multi-break with legacy fallback)
+              let breaks = c.schoolTiming?.breaks;
+              if (!breaks || breaks.length === 0) {
+                breaks = [{ after: c.schoolTiming?.breakAfter || 3, duration: c.schoolTiming?.breakDuration || 20, label: "Break" }];
+              }
+              breaks = [...breaks].sort((a, b) => a.after - b.after);
+              const startMinutes = (c.schoolTiming?.startTime || "08:00").split(":").map(Number);
+              const baseMin = startMinutes[0] * 60 + startMinutes[1];
+              const breaksInfo = breaks.map(b => {
+                let m = baseMin + periodDuration * b.after;
+                const start = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+                m += b.duration;
+                const end = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+                return { ...b, start, end };
+              });
+              // Lookup: period → break entries
+              const breaksAtPeriod = {};
+              for (const b of breaksInfo) {
+                if (!breaksAtPeriod[b.after]) breaksAtPeriod[b.after] = [];
+                breaksAtPeriod[b.after].push(b);
+              }
 
               return (
                 <div key={c._id} style={cardStyle}>
@@ -672,7 +747,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                         borderColor: "#0ea5e9"
                       }}
                     >
-                      📥 Download PDF
+                      Download PDF
                     </button>
                   </div>
 
@@ -683,52 +758,100 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                   ) : (
                     <>
                       <div className="table-wrap" style={{ overflowX: "auto", marginBottom: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                         <table className="responsive-table" style={{ borderCollapse: "collapse", fontSize: "14px", width: "100%" }}>
                           <thead>
                             <tr style={{ background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)" }}>
-                              <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #cbd5e1", fontWeight: "700", color: "var(--text-table-header)", fontSize: "15px" }}>📅 Day</th>
-                              {Array.from({ length: periodsDay }).map((_, i) => (
-                                <th
-                                  key={i}
-                                  style={{
-                                    padding: "12px",
-                                    textAlign: "center",
-                                    borderBottom: "2px solid #cbd5e1",
-                                    minWidth: "120px",
-                                    fontWeight: "700",
-                                    fontSize: "15px",
-                                    color: i === breakAfter - 1 ? "#d97706" : "#0c4a6e",
-                                    background: i === breakAfter - 1 ? "#fef3c7" : "transparent"
-                                  }}
-                                >
-                                  P{i + 1}
-                                </th>
-                              ))}
+                              <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #cbd5e1", fontWeight: "700", color: "var(--text-table-header)", fontSize: "15px" }}>Day</th>
+                              {(() => {
+                                const cells = [];
+                                for (let i = 0; i < periodsDay; i++) {
+                                  cells.push(
+                                    <th
+                                      key={i}
+                                      style={{
+                                        padding: "12px",
+                                        textAlign: "center",
+                                        borderBottom: "2px solid #cbd5e1",
+                                        minWidth: "120px",
+                                        fontWeight: "700",
+                                        fontSize: "15px",
+                                        color: "#0c4a6e",
+                                        background: "transparent"
+                                      }}
+                                    >
+                                      P{i + 1}
+                                    </th>
+                                  );
+                                  (breaksAtPeriod[i + 1] || []).forEach((b, bi) => {
+                                    cells.push(
+                                      <th
+                                        key={`break-${i}-${bi}`}
+                                        style={{
+                                          padding: "12px 8px",
+                                          textAlign: "center",
+                                          borderBottom: "2px solid #d97706",
+                                          minWidth: "90px",
+                                          fontWeight: "700",
+                                          fontSize: "14px",
+                                          color: "#92400e",
+                                          background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)"
+                                        }}
+                                      >
+                                        {b.label.toUpperCase()}
+                                      </th>
+                                    );
+                                  });
+                                }
+                                return cells;
+                              })()}
                             </tr>
                             {/* TIMING ROW */}
                             <tr style={{ background: "#f8fafc" }}>
                               <td style={{ padding: "8px 12px", textAlign: "left", borderBottom: "1px solid #cbd5e1", fontWeight: "600", color: "var(--text-tertiary)", fontSize: "12px" }}>
-                                ⏰ Time
+                                Time
                               </td>
-                              {Array.from({ length: periodsDay }).map((_, i) => {
-                                const firstPeriod = c.timetable?.[0]?.periods.find(p => p.period === i + 1);
-                                return (
-                                  <td
-                                    key={i}
-                                    style={{
-                                      padding: "8px 12px",
-                                      textAlign: "center",
-                                      borderBottom: "1px solid #cbd5e1",
-                                      fontWeight: "600",
-                                      color: "var(--text-tertiary)",
-                                      fontSize: "12px",
-                                      background: i === breakAfter - 1 ? "#fef3c7" : "transparent"
-                                    }}
-                                  >
-                                    {firstPeriod ? `${firstPeriod.startTime}-${firstPeriod.endTime}` : "—"}
-                                  </td>
-                                );
-                              })}
+                              {(() => {
+                                const cells = [];
+                                for (let i = 0; i < periodsDay; i++) {
+                                  const firstPeriod = c.timetable?.[0]?.periods.find(p => p.period === i + 1);
+                                  cells.push(
+                                    <td
+                                      key={i}
+                                      style={{
+                                        padding: "8px 12px",
+                                        textAlign: "center",
+                                        borderBottom: "1px solid #cbd5e1",
+                                        fontWeight: "600",
+                                        color: "var(--text-tertiary)",
+                                        fontSize: "12px",
+                                        background: "transparent"
+                                      }}
+                                    >
+                                      {firstPeriod ? `${firstPeriod.startTime}-${firstPeriod.endTime}` : "—"}
+                                    </td>
+                                  );
+                                  (breaksAtPeriod[i + 1] || []).forEach((b, bi) => {
+                                    cells.push(
+                                      <td
+                                        key={`break-${i}-${bi}`}
+                                        style={{
+                                          padding: "8px 12px",
+                                          textAlign: "center",
+                                          borderBottom: "1px solid #d97706",
+                                          fontWeight: "700",
+                                          color: "#92400e",
+                                          fontSize: "12px",
+                                          background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)"
+                                        }}
+                                      >
+                                        {b.start} - {b.end}
+                                      </td>
+                                    );
+                                  });
+                                }
+                                return cells;
+                              })()}
                             </tr>
                           </thead>
                           <tbody>
@@ -739,82 +862,84 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                                   <td style={{ padding: "12px", fontWeight: "700", fontSize: "15px", background: "#f0f9ff", borderBottom: "1px solid #e2e8f0", color: "var(--text-table-header)" }}>
                                     {dayName}
                                   </td>
-                                  {Array.from({ length: periodsDay }).map((_, i) => {
-                                    const period = dayData?.periods.find(p => p.period === i + 1);
-                                    const isFree = !period || period.subject === "Free Period";
+                                  {(() => {
+                                    const cells = [];
+                                    for (let i = 0; i < periodsDay; i++) {
+                                      const period = dayData?.periods.find(p => p.period === i + 1);
+                                      const isFree = !period || period.subject === "Free Period";
+                                      const cellId = `${c._id}|${dayName}|${i + 1}`;
+                                      const hasContent = period && !isFree;
 
-                                    return (
-                                      <td
-                                        key={i}
-                                        onClick={() => { if (editMode) openEditPopup(c._id, dayName, i + 1); }}
-                                        title={editMode ? "Click to edit this cell" : ""}
-                                        style={{
-                                          padding: "12px 8px",
-                                          textAlign: "center",
-                                          borderBottom: "1px solid #e2e8f0",
-                                          cursor: editMode ? "pointer" : "default",
-                                          background: editMode ? "#f0f9ff" : i === breakAfter - 1 ? "#fef3c7" : isFree ? "#f8fafc" : "#fff",
-                                          outline: editMode ? "2px dashed #93c5fd" : "none",
-                                          outlineOffset: "-1px",
-                                          fontSize: "13px"
-                                        }}
-                                      >
-                                        {period?.tracks && period.tracks.length > 0 ? (
-                                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                                            {period.tracks.map((tr, ti) => (
-                                              <div key={ti} style={{
-                                                borderTop: ti > 0 ? "1px dashed #cbd5e1" : "none",
-                                                paddingTop: ti > 0 ? "6px" : "0",
-                                              }}>
-                                                <div style={{ fontWeight: "700", color: "var(--text-primary)", fontSize: "13px" }}>
-                                                  {tr.groupName}
-                                                </div>
-                                                <div style={{ color: "var(--text-secondary)", fontSize: "12px", fontWeight: "500" }}>
-                                                  {tr.teacher?.name || "—"}
-                                                </div>
-                                                <div style={{ color: "#6b7280", fontSize: "11px", fontWeight: "400" }}>
-                                                  {tr.subject}
-                                                </div>
+                                      cells.push(
+                                        <DnDCell
+                                          key={i}
+                                          cellId={cellId}
+                                          isEditMode={editMode}
+                                          hasContent={hasContent}
+                                          onClick={() => { if (editMode) openEditPopup(c._id, dayName, i + 1); }}
+                                          baseStyle={{
+                                            padding: "12px 8px",
+                                            textAlign: "center",
+                                            borderBottom: "1px solid #e2e8f0",
+                                            fontSize: "13px",
+                                            background: editMode ? "#f0f9ff" : isFree ? "#f8fafc" : "#fff",
+                                            outline: editMode ? "2px dashed #93c5fd" : "none",
+                                            outlineOffset: "-1px",
+                                          }}
+                                        >
+                                          {period?.tracks && period.tracks.length > 0 ? (
+                                            <div>
+                                              <div style={{ fontWeight: "700", color: "var(--text-primary)", fontSize: "13px" }}>
+                                                {period.tracks.map(t => t.groupName).join(" / ")}
                                               </div>
-                                            ))}
-                                          </div>
-                                        ) : isFree ? (
-                                          <span style={{ color: "#cbd5e1", fontWeight: "600", fontSize: "13px" }}>Free</span>
-                                        ) : (
-                                          <>
-                                            <div style={{ fontWeight: "700", color: "var(--text-primary)", marginBottom: "4px", fontSize: "14px" }}>{period.subject}</div>
-                                            <div style={{ color: "var(--text-secondary)", fontSize: "12px", fontWeight: "500" }}>{period.teacher?.name || "—"}</div>
-                                          </>
-                                        )}
-                                      </td>
-                                    );
-                                  })}
+                                              <div style={{ color: "var(--text-secondary)", fontSize: "12px", fontWeight: "500", marginTop: "2px" }}>
+                                                {[period.teacher?.name, ...period.tracks.map(t => t.teacher?.name)].filter(Boolean).join(" / ")}
+                                              </div>
+                                            </div>
+                                          ) : isFree ? (
+                                            <span style={{ color: "#cbd5e1", fontWeight: "600", fontSize: "13px" }}>Free</span>
+                                          ) : (
+                                            <>
+                                              <div style={{ fontWeight: "700", color: "var(--text-primary)", marginBottom: "4px", fontSize: "14px" }}>{period.subject}</div>
+                                              <div style={{ color: "var(--text-secondary)", fontSize: "12px", fontWeight: "500" }}>{period.teacher?.name || "—"}</div>
+                                            </>
+                                          )}
+                                        </DnDCell>
+                                      );
+                                      (breaksAtPeriod[i + 1] || []).forEach((b, bi) => {
+                                        cells.push(
+                                          <td
+                                            key={`break-${i}-${bi}`}
+                                            style={{
+                                              padding: "12px 8px",
+                                              textAlign: "center",
+                                              verticalAlign: "middle",
+                                              borderBottom: "1px solid #e2e8f0",
+                                              background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
+                                              fontWeight: "700",
+                                              color: "#92400e",
+                                              fontSize: "13px",
+                                              minWidth: "90px",
+                                              borderLeft: bi === 0 ? "2px solid #d97706" : "none",
+                                              borderRight: "2px solid #d97706",
+                                              lineHeight: "1.6"
+                                            }}
+                                          >
+                                            <div style={{ fontSize: "14px" }}>{b.label.toUpperCase()}</div>
+                                            <div style={{ fontSize: "12px", fontWeight: "600", marginTop: "2px" }}>{b.start} - {b.end}</div>
+                                            <div style={{ fontSize: "11px", fontWeight: "500", marginTop: "1px" }}>({b.duration} min)</div>
+                                          </td>
+                                        );
+                                      });
+                                    }
+                                    return cells;
+                                  })()}
                                 </tr>
                               );
                             })}
-
-                            {/* BREAK ROW */}
-                            <tr>
-                              <td style={{ padding: "12px", fontWeight: "700", fontSize: "15px", background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)", borderBottom: "2px solid #d97706", color: "var(--text-break)" }}>
-                                ☕ BREAK
-                              </td>
-                              <td
-                                colSpan={periodsDay}
-                                style={{
-                                  padding: "12px",
-                                  textAlign: "center",
-                                  background: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
-                                  borderBottom: "2px solid #d97706",
-                                  fontWeight: "700",
-                                  color: "var(--text-break)",
-                                  fontSize: "14px"
-                                }}
-                              >
-                                {breakStart} - {breakEnd} ({breakDuration} min)
-                              </td>
-                            </tr>
                           </tbody>
                         </table>
+                        </DndContext>
                       </div>
 
                       {quotaSummary && quotaSummary[c.name] && (
@@ -825,7 +950,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                           padding: "16px",
                           fontSize: "14px"
                         }}>
-                          <strong style={{ color: "var(--text-success)", fontSize: "15px" }}>📊 Quota Summary</strong>
+                          <strong style={{ color: "var(--text-success)", fontSize: "15px" }}>Quota Summary</strong>
                           <table style={{ width: "100%", marginTop: "12px", fontSize: "13px", borderCollapse: "collapse" }}>
                             <tbody>
                               {quotaSummary[c.name].teachers?.map(t => (
@@ -834,7 +959,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                                     <strong style={{ color: "var(--text-success)" }}>{t.name}</strong> <span style={{ color: "#059669" }}>({t.subject})</span>
                                   </td>
                                   <td style={{ padding: "6px 8px", textAlign: "center" }}>
-                                    {t.got}/{t.target} {t.got === t.target ? "✅" : t.got < t.target ? "⚠️" : "❌"}
+                                    {t.got}/{t.target} {t.got === t.target ? "[OK]" : t.got < t.target ? "[!]" : "[X]"}
                                   </td>
                                 </tr>
                               ))}
@@ -879,7 +1004,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
               maxWidth: "90vw",
             }} onClick={e => e.stopPropagation()}>
               <h3 style={{ margin: "0 0 6px 0", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>
-                ✏️ Edit Period
+                Edit Period
               </h3>
               <p style={{ margin: "0 0 20px 0", fontSize: "14px", color: "var(--text-secondary)" }}>
                 {editPopup.day} — Period {editPopup.period}
@@ -887,7 +1012,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
 
               <div style={{ marginBottom: "16px" }}>
                 <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
-                  👨‍🏫 Single Teacher
+                  Single Teacher
                 </label>
                 <select
                   value={editTeacher}
@@ -915,7 +1040,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
 
               <div style={{ marginBottom: "20px" }}>
                 <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
-                  📖 Subject
+                  Subject
                 </label>
                 <input
                   type="text"
@@ -944,7 +1069,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                   <label style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
-                    🎯 Elective Groups (optional)
+                    Elective Groups (optional)
                   </label>
                   <button
                     onClick={() => setEditTracks([...editTracks, { groupName: "", teacher: "", subject: "" }])}
@@ -1084,7 +1209,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                     cursor: "pointer",
                   }}
                 >
-                  💾 Save
+                  Save
                 </button>
                 <button
                   onClick={() => setEditPopup(null)}

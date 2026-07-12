@@ -21,7 +21,7 @@ export default function AbsencesTab({
     <div>
       {!isAdmin && (
         <p style={{ margin: "0 0 12px 0", fontSize: "15px", color: "var(--text-secondary)", fontStyle: "italic" }}>
-          👁️ View-only mode. Contact an admin to make changes.
+          View-only mode. Contact an admin to make changes.
         </p>
       )}
 
@@ -103,10 +103,10 @@ export default function AbsencesTab({
             <table style={{ width: "100%", fontSize: "15px", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)", borderBottom: "2px solid #fecaca" }}>
-                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#991b1b" }}>👤 Teacher</th>
-                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#991b1b" }}>📖 Subject</th>
-                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#991b1b" }}>📅 Day</th>
-                  {isAdmin && <th style={{ padding: "14px 16px", textAlign: "right", fontWeight: "700", color: "#991b1b" }}>⚙️ Actions</th>}
+                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#991b1b" }}>Teacher</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#991b1b" }}>Subject</th>
+                  <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "700", color: "#991b1b" }}>Day</th>
+                  {isAdmin && <th style={{ padding: "14px 16px", textAlign: "right", fontWeight: "700", color: "#991b1b" }}>Actions</th>}
                 </tr>
               </thead>
               <tbody>
