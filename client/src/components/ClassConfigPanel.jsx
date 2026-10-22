@@ -16,6 +16,7 @@ export default function ClassConfigPanel({
   assignTeacher,
   removeTeacher,
   saveTeacherGroups,
+  saveClassTeacher,
   saveQuota,
   clearTeacherQuota,
   savePpd,
@@ -33,6 +34,8 @@ export default function ClassConfigPanel({
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupTids, setNewGroupTids] = useState([]);
   const [savingGroups, setSavingGroups] = useState(false);
+  const [selectedClassTeacher, setSelectedClassTeacher] = useState(classItem.classTeacher?._id || "");
+  const [savingClassTeacher, setSavingClassTeacher] = useState(false);
 
   useEffect(() => {
     const raw = classItem.teacherGroups;
@@ -45,6 +48,16 @@ export default function ClassConfigPanel({
       setLocalGroups([]);
     }
   }, [classItem._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setSelectedClassTeacher(classItem.classTeacher?._id || "");
+  }, [classItem._id, classItem.classTeacher]);
+
+  const handleSaveClassTeacher = async () => {
+    setSavingClassTeacher(true);
+    await saveClassTeacher(classItem._id, selectedClassTeacher || null);
+    setSavingClassTeacher(false);
+  };
 
   const handleAddGroup = () => {
     const name = newGroupName.trim();
@@ -75,7 +88,58 @@ export default function ClassConfigPanel({
   return (
     <div style={{ background: "linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)", border: "1px solid #cbd5e1", borderRadius: "10px", padding: "16px", marginTop: "16px" }}>
       
-      {/* A. PERIODS PER DAY */}
+      {/* A. CLASS TEACHER */}
+      <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
+        <label style={{ display: "block", marginBottom: "8px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
+          Class Teacher
+        </label>
+        <p style={{ margin: "0 0 10px 0", fontSize: "13px", color: "var(--text-secondary)" }}>
+          The primary teacher responsible for this class. Each teacher can only be class teacher of one class.
+        </p>
+        {classItem.classTeacher && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "8px 12px",
+            background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
+            border: "1px solid #bbf7d0",
+            borderRadius: "8px",
+            marginBottom: "10px",
+            fontSize: "14px"
+          }}>
+            <span style={{ color: "#0f766e", fontWeight: 700 }}>Current:</span>
+            <span style={{ color: "#0f766e" }}>{classItem.classTeacher.name} ({classItem.classTeacher.subject})</span>
+          </div>
+        )}
+        <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+          <select
+            value={selectedClassTeacher}
+            onChange={e => setSelectedClassTeacher(e.target.value)}
+            style={{ ...inputStyle, flex: 1, cursor: "pointer", fontSize: "14px", padding: "6px" }}
+          >
+            <option value="">— No class teacher —</option>
+            {classItem.teachers.map(t => (
+              <option key={t._id} value={t._id}>{t.name} ({t.subject})</option>
+            ))}
+          </select>
+          <button
+            onClick={handleSaveClassTeacher}
+            disabled={savingClassTeacher || selectedClassTeacher === (classItem.classTeacher?._id || "")}
+            style={{
+              ...buttonPrimary,
+              padding: "6px 14px",
+              fontSize: "14px",
+              opacity: (savingClassTeacher || selectedClassTeacher === (classItem.classTeacher?._id || "")) ? 0.5 : 1,
+              cursor: (savingClassTeacher || selectedClassTeacher === (classItem.classTeacher?._id || "")) ? "not-allowed" : "pointer",
+            }}
+          >
+            {savingClassTeacher ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+
+      {/* B. PERIODS PER DAY */}
       <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
         <label style={{ display: "block", marginBottom: "8px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
           Periods Per Day
@@ -100,7 +164,7 @@ export default function ClassConfigPanel({
         </div>
       </div>
 
-      {/* B. ASSIGN TEACHERS */}
+      {/* C. ASSIGN TEACHERS */}
       <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
         <label style={{ display: "block", marginBottom: "8px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
           Assign Teachers
@@ -169,7 +233,7 @@ export default function ClassConfigPanel({
         )}
       </div>
 
-      {/* C. TEACHER GROUPS */}
+      {/* D. TEACHER GROUPS */}
       <div style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
         <label style={{ display: "block", marginBottom: "8px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>
           Teacher Groups
@@ -293,7 +357,7 @@ export default function ClassConfigPanel({
         </button>
       </div>
 
-      {/* D. TEACHER QUOTA */}
+      {/* E. TEACHER QUOTA */}
       {classItem.teachers.length > 0 && (
         <div>
           <label style={{ display: "block", marginBottom: "10px", fontWeight: "700", fontSize: "15px", color: "var(--text-primary)" }}>

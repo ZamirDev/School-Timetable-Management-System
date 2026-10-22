@@ -1,6 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
 const User = require("../models/User");
 const Teacher = require("../models/Teacher");
 const Class = require("../models/Class");
@@ -9,6 +10,14 @@ const LeaveRequest = require("../models/LeaveRequest");
 const { auth, adminOnly, JWT_SECRET } = require("../middleware/auth");
 
 const router = express.Router();
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many login attempts. Please try again after 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // POST /auth/register — admin only, creates new accounts
 router.post("/register", auth, adminOnly, async (req, res) => {
@@ -51,8 +60,7 @@ router.post("/register", auth, adminOnly, async (req, res) => {
       schoolName: schoolName || "",
       createdBy: req.effectiveCreatedBy,
       teacherRef,
-      classRef: studentClassRef,
-      plainPassword: password
+      classRef: studentClassRef
     });
     res.status(201).json({
       _id: user._id,
@@ -68,9 +76,12 @@ router.post("/register", auth, adminOnly, async (req, res) => {
 });
 
 // POST /auth/login
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (typeof email !== "string" || typeof password !== "string") {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password required" });
     }
@@ -189,8 +200,7 @@ router.post("/bulk-import", auth, adminOnly, async (req, res) => {
             role: "teacher",
             schoolName: "",
             createdBy: req.effectiveCreatedBy,
-            teacherRef: teacher._id,
-            plainPassword: row.password
+            teacherRef: teacher._id
           });
           result.imported++;
         } else if (type === "student") {
@@ -210,8 +220,7 @@ router.post("/bulk-import", auth, adminOnly, async (req, res) => {
             role: "student",
             schoolName: "",
             createdBy: req.effectiveCreatedBy,
-            classRef: cls._id,
-            plainPassword: row.password
+            classRef: cls._id
           });
           result.imported++;
         } else {
@@ -242,8 +251,6 @@ router.post("/forgot-password", async (req, res) => {
     user.resetToken = resetToken;
     user.resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
     await user.save();
-
-    console.log(`\n🔐 Password reset token for ${email}: ${resetToken}\n`);
 
     res.json({
       message: "Reset token generated. Check server console or copy the token below.",

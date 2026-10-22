@@ -265,6 +265,21 @@ function AppContent() {
     fetchClasses();
   };
 
+  const saveClassTeacher = async (classId, teacherId) => {
+    const res = await apiFetch(`/classes/${classId}/class-teacher`, {
+      method: "PUT",
+      body: JSON.stringify({ teacherId: teacherId || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      toast.error(data.error || "Failed to set class teacher");
+      return false;
+    }
+    toast.success(data.message);
+    fetchClasses();
+    return true;
+  };
+
   // ─────────────────────────────────────
   //  PERIODS PER DAY
   // ─────────────────────────────────────
@@ -588,6 +603,7 @@ function AppContent() {
                 assignTeacher={assignTeacher}
                 removeTeacher={removeTeacher}
                 saveTeacherGroups={saveTeacherGroups}
+                saveClassTeacher={saveClassTeacher}
                 saveQuota={saveQuota}
                 clearTeacherQuota={clearTeacherQuota}
                 savePpd={savePpd}

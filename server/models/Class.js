@@ -63,6 +63,11 @@ const classSchema = new mongoose.Schema({
     of: Number,
     default: {}
   },
+  classTeacher: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Teacher",
+    default: null
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

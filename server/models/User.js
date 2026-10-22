@@ -43,10 +43,6 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  plainPassword: {
-    type: String,
-    default: ""
-  }
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);

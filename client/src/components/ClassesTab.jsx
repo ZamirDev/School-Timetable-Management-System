@@ -22,6 +22,7 @@ export default function ClassesTab({
   assignTeacher,
   removeTeacher,
   saveTeacherGroups,
+  saveClassTeacher,
   saveQuota,
   clearTeacherQuota,
   savePpd,
@@ -220,6 +221,22 @@ export default function ClassesTab({
                 <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "var(--text-secondary)" }}>
                   <strong style={{ color: "var(--text-primary)" }}>{c.teachers.length}</strong> teacher{c.teachers.length !== 1 ? "s" : ""} assigned
                 </p>
+                {c.classTeacher && (
+                  <p style={{ margin: "4px 0 0 0" }}>
+                    <span style={{
+                      display: "inline-block",
+                      background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
+                      color: "#0f766e",
+                      padding: "2px 10px",
+                      borderRadius: "12px",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      border: "1px solid #bbf7d0"
+                    }}>
+                      Class Teacher: {c.classTeacher.name}
+                    </span>
+                  </p>
+                )}
               </div>
               {isAdmin && (
               <div style={{ display: "flex", gap: "8px" }}>
@@ -269,6 +286,7 @@ export default function ClassesTab({
                 assignTeacher={assignTeacher}
                 removeTeacher={removeTeacher}
                 saveTeacherGroups={saveTeacherGroups}
+                saveClassTeacher={saveClassTeacher}
                 saveQuota={saveQuota}
                 clearTeacherQuota={clearTeacherQuota}
                 savePpd={savePpd}

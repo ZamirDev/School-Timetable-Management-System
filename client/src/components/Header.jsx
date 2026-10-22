@@ -112,7 +112,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
 
       {/* HELP MODAL */}
       {showHelp && (
-        <div style={{
+        <div className="animate__animated animate__fadeIn" style={{
           position: "fixed",
           top: 0,
           left: 0,
@@ -122,16 +122,18 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          zIndex: 1000
+          zIndex: 1000,
+          animationDuration: "0.2s"
         }}>
-          <div style={{
+          <div className="animate__animated animate__fadeInUp" style={{
             background: "var(--bg-modal)",
             borderRadius: "12px",
             padding: "32px",
             maxWidth: "750px",
             maxHeight: "85vh",
             overflowY: "auto",
-            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)"
+            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+            animationDuration: "0.3s"
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
               <h2 style={{ margin: 0, fontSize: "24px", fontWeight: "700", color: "#0f172a" }}>
@@ -195,6 +197,7 @@ export default function Header({ darkMode, toggleDarkMode, user, onLogout }) {
                 </p>
                 <ul style={{ margin: "8px 0 0 20px", paddingLeft: 0 }}>
                   <li><strong>Add New Class:</strong> Enter class name (e.g., 10A)</li>
+                  <li><strong>Class Teacher:</strong> Assign a primary teacher responsible for this class (one teacher per class only)</li>
                   <li><strong>School Timing:</strong> Set start time, period duration, and break (applies to all classes)</li>
                   <li><strong>Configure:</strong> Assign teachers to a class and set periods per day</li>
                   <li><strong>Teacher Quota:</strong> Control how many periods each teacher teaches (optional — skip for auto-distribution)</li>

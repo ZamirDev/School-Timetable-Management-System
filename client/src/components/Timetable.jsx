@@ -5,7 +5,7 @@ import { apiFetch } from "../utils/api";
 import * as XLSX from "xlsx";
 import toast from "react-hot-toast";
 
-function DnDCell({ cellId, isEditMode, hasContent, children, onClick, baseStyle }) {
+function DnDCell({ cellId, isEditMode, hasContent, children, onDoubleClick, baseStyle }) {
   const { setNodeRef: dropRef, isOver } = useDroppable({
     id: cellId,
     disabled: !isEditMode,
@@ -37,7 +37,7 @@ function DnDCell({ cellId, isEditMode, hasContent, children, onClick, baseStyle 
   return (
     <td
       ref={mergedRef}
-      onClick={onClick}
+      onDoubleClick={onDoubleClick}
       style={style}
       {...(showDrag ? { ...listeners, ...attributes } : {})}
     >
@@ -208,6 +208,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
         "Break After Period": cl.schoolTiming?.breakAfter || 3,
         "Break Duration (min)": cl.schoolTiming?.breakDuration || 20,
         "Teachers": (cl.teachers || []).map(t => t.name).join(", "),
+        "Class Teacher": cl.classTeacher?.name || "",
       }));
       const ws2 = XLSX.utils.json_to_sheet(classesSheet);
       XLSX.utils.book_append_sheet(wb, ws2, "Classes");
@@ -338,6 +339,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
             breakAfter: r["Break After Period"] || r.breakAfter,
             breakDuration: r["Break Duration (min)"] || r.breakDuration,
             teacherNames: r.Teachers || r.teachers || "",
+            classTeacherName: r["Class Teacher"] || r.classTeacher || "",
           })),
           timetable: rawTimetable.map(r => ({
             className: r.Class || r.className,
@@ -569,7 +571,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
             </button>
             {editMode && (
               <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                Click a cell to edit its teacher and subject
+                Drag cells to swap, or click to edit teacher/subject
               </span>
             )}
           </div>
@@ -876,7 +878,7 @@ export default function Timetable({ classes, selectedClass, setSelectedClass, ge
                                           cellId={cellId}
                                           isEditMode={editMode}
                                           hasContent={hasContent}
-                                          onClick={() => { if (editMode) openEditPopup(c._id, dayName, i + 1); }}
+                                          onDoubleClick={() => { if (editMode) openEditPopup(c._id, dayName, i + 1); }}
                                           baseStyle={{
                                             padding: "12px 8px",
                                             textAlign: "center",

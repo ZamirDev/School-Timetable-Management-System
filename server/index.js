@@ -22,7 +22,14 @@ const path = require("path");
 const clientBuild = path.join(__dirname, "..", "client", "build");
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://timetable-client-lyart.vercel.app",
+    "https://app.zionia.me",
+    "http://localhost:3000"
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use("/auth", authRoutes);
 app.use("/leave-requests", leaveRequestRoutes);
@@ -1154,7 +1161,6 @@ app.post("/import", auth, adminOnly, async (req, res) => {
         role: a.role || "teacher",
         schoolName: a.name || a.schoolName || "",
         createdBy: req.effectiveCreatedBy,
-        plainPassword: pw,
       };
       if ((a.role || "").toLowerCase() === "teacher" && a.name && a.subject) {
         const tid = teacherMap[`${a.name.trim()}_${a.subject.trim()}`];
@@ -1192,6 +1198,14 @@ app.post("/import", auth, adminOnly, async (req, res) => {
           if (teacher && !cls.teachers.some(t => String(t) === String(teacher._id))) {
             cls.teachers.push(teacher._id);
           }
+        }
+      }
+      // Set class teacher if provided
+      if (cl.classTeacherName) {
+        const ctName = String(cl.classTeacherName).trim();
+        if (ctName) {
+          const ct = await Teacher.findOne({ name: { $regex: `^${ctName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, createdBy: req.effectiveCreatedBy });
+          if (ct) cls.classTeacher = ct._id;
         }
       }
       await cls.save();
@@ -1487,6 +1501,11 @@ app.put("/classes/:id/remove-teacher", auth, adminOnly, async (req, res) => {
     cls.teacherQuota.delete(teacherId);
   }
 
+  // Clear class teacher if removed teacher was the class teacher
+  if (cls.classTeacher && String(cls.classTeacher) === String(teacherId)) {
+    cls.classTeacher = null;
+  }
+
   await cls.save();
   res.json(cls);
 });
@@ -1548,8 +1567,57 @@ app.put("/classes/:id/teacher-groups", auth, adminOnly, async (req, res) => {
   res.json(updated);
 });
 
+app.put("/classes/:id/class-teacher", auth, adminOnly, async (req, res) => {
+  try {
+    const { teacherId } = req.body;
+    const cls = await Class.findOne({ _id: req.params.id, createdBy: req.effectiveCreatedBy });
+    if (!cls) return res.status(404).json({ error: "Class not found" });
+
+    // Clear class teacher
+    if (!teacherId) {
+      cls.classTeacher = null;
+      await cls.save();
+      return res.json({ message: "Class teacher removed", classTeacher: null });
+    }
+
+    // Verify teacher is assigned to this class
+    const isAssigned = cls.teachers.some(t => String(t._id ?? t) === String(teacherId));
+    if (!isAssigned) return res.status(400).json({ error: "Teacher must be assigned to this class first" });
+
+    // Verify teacher exists
+    const teacher = await Teacher.findOne({ _id: teacherId, createdBy: req.effectiveCreatedBy });
+    if (!teacher) return res.status(404).json({ error: "Teacher not found" });
+
+    // Check uniqueness — no other class can have this teacher as class teacher
+    const existingClass = await Class.findOne({
+      classTeacher: teacherId,
+      createdBy: req.effectiveCreatedBy,
+      _id: { $ne: cls._id }
+    });
+    if (existingClass) {
+      return res.status(400).json({ error: `${teacher.name} is already class teacher of ${existingClass.name}` });
+    }
+
+    cls.classTeacher = teacherId;
+    await cls.save();
+
+    const updated = await Class.findById(cls._id)
+      .populate("teachers")
+      .populate("classTeacher")
+      .populate("teacherGroups.teachers")
+      .populate("timetable.periods.teacher")
+      .populate("timetable.periods.tracks.teacher");
+
+    res.json({ message: `Class teacher set to ${teacher.name}`, classTeacher: teacher });
+  } catch (err) {
+    console.log("CLASS TEACHER ERROR:", err);
+    res.status(500).json({ error: "Failed to set class teacher" });
+  }
+});
+
 app.delete("/teachers/:id", auth, adminOnly, async (req, res) => {
   await Absence.deleteMany({ teacher: req.params.id, createdBy: req.effectiveCreatedBy });
+  await Class.updateMany({ createdBy: req.effectiveCreatedBy, classTeacher: req.params.id }, { $set: { classTeacher: null } });
   await Teacher.findOneAndDelete({ _id: req.params.id, createdBy: req.effectiveCreatedBy });
   res.json({ message: "Teacher deleted" });
 });
@@ -1571,6 +1639,7 @@ app.post("/classes", auth, adminOnly, async (req, res) => {
 app.get("/classes", auth, async (req, res) => {
   const classes = await Class.find({ createdBy: req.effectiveCreatedBy })
     .populate("teachers")
+    .populate("classTeacher")
     .populate("teacherGroups.teachers")
     .populate("timetable.periods.teacher")
     .populate("timetable.periods.tracks.teacher");
@@ -1590,6 +1659,7 @@ app.get("/classes/:id", auth, async (req, res) => {
   try {
     const cls = await Class.findById(req.params.id)
       .populate("teachers")
+      .populate("classTeacher")
       .populate("teacherGroups.teachers")
       .populate("timetable.periods.teacher")
       .populate("timetable.periods.tracks.teacher");
